@@ -1,0 +1,375 @@
+import SwiftUI
+import AppKit
+import VokabKit
+
+/// Single-word detail (SPEC §12 surface #2). Core fields render instantly;
+/// tier-2 fields (etymology, synonyms, antonyms, word family) are fetched lazily
+/// on first open and merged.
+struct WordDetailView: View {
+    @EnvironmentObject private var env: AppEnvironment
+    @State private var current: Entry
+    @State private var enriching = false
+    private let context: DetailContext
+
+    init(entry: Entry, context: DetailContext = .library) {
+        _current = State(initialValue: entry)
+        self.context = context
+    }
+
+    private var entry: Entry { current }
+    private var card: WordCard? { CardDecoding.word(current) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if entry.analysisState == AnalysisState.analyzing.rawValue {
+                        analyzingPlaceholder
+                    } else if entry.analysisState == AnalysisState.failed.rawValue {
+                        failedView
+                    } else {
+                        header
+                        Hairline()
+                        twoColumns
+                        Hairline()
+                        etymology
+                        seenIn
+                        examples
+                        synAnt
+                        collocationsSection
+                        confusablesSection
+                    }
+                }
+            }
+            if context.isCapture { captureBottomBar } else { bottomBar }
+        }
+        .background(Theme.bgPrimary)
+        .task {
+            if !current.enriched {
+                enriching = true
+                let updated = try? await env.enrichment.enrich(entry: current)
+                withAnimation(.easeOut(duration: 0.25)) {
+                    if let updated { current = updated }
+                    enriching = false
+                }
+                if updated != nil { WindowManager.notifyDataChanged() }
+            }
+            // Lazily classify Phase-1 entries that have no category yet.
+            if current.category == nil,
+               let backfilled = try? await env.categoryBackfiller.backfill(entry: current) {
+                current.category = backfilled
+                WindowManager.notifyDataChanged()
+            }
+            // Backfill collocations/confusables for word entries enriched before
+            // those fields existed. New captures already have them from relations.
+            // Require a decodable card so a corrupt entry is never overwritten.
+            if current.cardType == .word, let c = CardDecoding.word(current),
+               c.collocations.isEmpty, c.confusables.isEmpty,
+               let updated = try? await env.relationsBackfiller.backfill(entry: current) {
+                current = updated
+                WindowManager.notifyDataChanged()
+            }
+        }
+    }
+
+    // MARK: Analysis state placeholders
+
+    private var analyzingPlaceholder: some View {
+        AnalysisSkeletonView(
+            rawText: entry.rawText,
+            titleSize: 26,
+            verticalPadding: 16,
+            placeholderLines: [
+                SkeletonLine("Placeholder meaning text shown while analyzing", size: 15),
+                SkeletonLine("Placeholder definition text for skeleton shape", size: 13),
+                SkeletonLine("Word family placeholder term", size: 13)
+            ]
+        )
+    }
+
+    private var failedView: some View {
+        AnalysisFailedView(
+            rawText: entry.rawText,
+            titleSize: 26,
+            verticalPadding: 16
+        ) {
+            guard let id = entry.id else { return }
+            env.retryAnalysis(id: id)
+        }
+    }
+
+    // MARK: Header
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .lastTextBaseline, spacing: 12) {
+                Text(entry.rawText)
+                    .font(.system(size: 26, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                    .lineLimit(2).minimumScaleFactor(0.5)
+                if let ipa = card?.ipa {
+                    Text(ipa).font(Theme.mono(14)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                }
+                PronounceButton(text: entry.rawText,
+                               accent: Accent(settingsValue: env.settings.pronunciationAccent))
+                Spacer(minLength: 8)
+                Text([entry.language.uppercased(), card?.frequency?.pillTokens().first]
+                        .compactMap { $0 }.joined(separator: " · "))
+                    .font(.system(size: 12)).foregroundStyle(Theme.textTertiary).lineLimit(1)
+            }
+            FlowLayout(spacing: 6) {
+                MultiPill(card?.pos, style: .type)
+                if let cefr = card?.cefrLevel, cefr.cefrLevel != nil { Pill.cefr(cefr) }
+                MultiPill(card?.register, style: .register)
+                CategoryPill(current: current.category) { picked in
+                    if let id = current.id {
+                        try? env.entries.setCategory(id: id, category: picked)
+                        current.category = picked
+                        WindowManager.notifyDataChanged()
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 12)
+    }
+
+    // MARK: Two columns
+
+    private var twoColumns: some View {
+        HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                SecLabel("Meaning")
+                if let vi = card?.meaningVi {
+                    Text(vi).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                }
+                if let en = card?.meaningEn {
+                    Text(en).font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineSpacing(3)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+
+            Rectangle().fill(Theme.borderTertiary).frame(width: Theme.hairline)
+
+            VStack(alignment: .leading, spacing: 8) {
+                SecLabel("Word family")
+                if let family = card?.wordFamily, !family.isEmpty {
+                    ForEach(family, id: \.self) { term in
+                        Text(term).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                    }
+                } else if enriching {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(["placeholder term", "another term", "third term"], id: \.self) {
+                            Text($0).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                        }
+                    }
+                    .skeleton()
+                    .transition(.opacity)
+                } else {
+                    Text("—").foregroundStyle(Theme.textTertiary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+        }
+    }
+
+    // MARK: Etymology band
+
+    @ViewBuilder private var etymology: some View {
+        if let ety = card?.etymology, !ety.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                SecLabel("Etymology")
+                etymologyText(ety).font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineSpacing(3)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .background(Theme.bgSecondary)
+            Hairline()
+        } else if enriching {
+            VStack(alignment: .leading, spacing: 6) {
+                SecLabel("Etymology")
+                Text("Placeholder etymology text that spans a couple of lines to mimic the real description block shape.")
+                    .font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineSpacing(3)
+                    .skeleton()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 12).background(Theme.bgSecondary)
+            .transition(.opacity)
+            Hairline()
+        }
+    }
+
+    /// Etymology with source-language names highlighted in mono teal (mockup look).
+    private func etymologyText(_ text: String) -> Text {
+        let words = text.split(separator: " ").map(String.init)
+        var result = Text("")
+        for (i, word) in words.enumerated() {
+            let piece: Text
+            if POSColorizer.isLanguage(word) {
+                piece = Text(word).font(Theme.mono(13)).foregroundColor(Color(hex: 0x085041))
+            } else {
+                piece = Text(word)
+            }
+            result = (i == 0) ? piece : result + Text(" ") + piece
+        }
+        return result
+    }
+
+    // MARK: Seen in
+
+    @ViewBuilder private var seenIn: some View {
+        if let sentence = entry.captureSentence {
+            VStack(alignment: .leading, spacing: 8) {
+                SecLabel("Seen in")
+                HighlightedSentence(sentence: sentence, target: entry.rawText)
+                    .font(.system(size: 13)).lineSpacing(3)
+                    .padding(.leading, 10)
+                    .overlay(alignment: .leading) { Rectangle().fill(Theme.accent).frame(width: 2) }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+        }
+    }
+
+    // MARK: Examples
+
+    @ViewBuilder private var examples: some View {
+        if let ex = card?.examples, !ex.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                SecLabel("Examples")
+                ForEach(ex, id: \.self) { example in
+                    HStack(alignment: .top, spacing: 8) {
+                        Text(example)
+                            .font(.system(size: 13)).foregroundStyle(Theme.textPrimary).lineSpacing(3)
+                            .padding(.leading, 10)
+                            .overlay(alignment: .leading) {
+                                Rectangle().fill(Theme.borderSecondary).frame(width: 2)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        PronounceButton(text: example,
+                                        accent: Accent(settingsValue: env.settings.pronunciationAccent),
+                                        size: .small)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+        }
+    }
+
+    // MARK: Synonyms / antonyms
+
+    @ViewBuilder private var synAnt: some View {
+        let syn = card?.synonyms ?? []
+        let ant = card?.antonyms ?? []
+        if !syn.isEmpty || !ant.isEmpty {
+            HStack(alignment: .top, spacing: 14) {
+                if !syn.isEmpty { chipColumn("Synonyms", syn) }
+                if !ant.isEmpty { chipColumn("Antonyms", ant) }
+            }
+            .padding(.horizontal, 16).padding(.bottom, 14)
+        } else if enriching {
+            VStack(alignment: .leading, spacing: 8) {
+                SecLabel("Synonyms")
+                FlowLayout(spacing: 6) {
+                    ForEach(["synonym", "another", "third", "fourth"], id: \.self) { Chip($0) }
+                }
+                .skeleton()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.bottom, 14)
+            .transition(.opacity)
+        }
+    }
+
+    // MARK: Collocations
+
+    @ViewBuilder private var collocationsSection: some View {
+        let cols = card?.collocations ?? []
+        if !cols.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                SecLabel(L.t("Collocations", "Kết hợp từ"))
+                FlowLayout(spacing: 6) {
+                    ForEach(cols, id: \.self) { Chip($0) }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+        }
+    }
+
+    // MARK: Easily confused
+
+    @ViewBuilder private var confusablesSection: some View {
+        let items = card?.confusables ?? []
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                SecLabel(L.t("Easily confused", "Dễ nhầm"))
+                ForEach(items, id: \.word) { item in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(item.word)
+                            .font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                        if let note = item.noteVi, !note.isEmpty {
+                            Text(note)
+                                .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+        }
+    }
+
+    private func chipColumn(_ title: String, _ items: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SecLabel(title)
+            FlowLayout(spacing: 6) { ForEach(items, id: \.self) { Chip($0) } }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Bottom bar
+
+    private var bottomBar: some View {
+        VStack(spacing: 0) {
+            Hairline()
+            HStack {
+                if let app = entry.sourceApp {
+                    Text("Source: \(app)\(entry.sourceURL.map { " · \($0)" } ?? "")")
+                        .font(.system(size: 12)).foregroundStyle(Theme.textTertiary).lineLimit(1)
+                }
+                Spacer()
+                Button { PracticePresenter.shared.present(entry: entry) } label: {
+                    Label(L.t("Practice writing", "Luyện viết"), systemImage: "pencil.line")
+                }
+                .buttonStyle(.vPrimary)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(Theme.bgSecondary)
+        }
+    }
+
+    private var captureBottomBar: some View {
+        VStack(spacing: 0) {
+            Hairline()
+            HStack(spacing: 10) {
+                Label(L.t("Saved", "Đã lưu"), systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color(hex: 0x0F6E56))
+                if let app = entry.sourceApp {
+                    Text("Source: \(app)\(entry.sourceURL.map { " · \($0)" } ?? "")")
+                        .font(.system(size: 12)).foregroundStyle(Theme.textTertiary).lineLimit(1)
+                }
+                Spacer()
+                Button(L.t("Done", "Xong")) { context.onDone?() }
+                    .buttonStyle(.vPrimary)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(Theme.bgSecondary)
+        }
+    }
+}

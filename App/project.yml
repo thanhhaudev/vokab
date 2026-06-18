@@ -1,0 +1,37 @@
+name: vokab
+options:
+  bundleIdPrefix: com.thanhhaudev
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+packages:
+  VokabKit:
+    path: ..
+
+targets:
+  vokab:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+    dependencies:
+      - package: VokabKit
+        product: VokabKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.thanhhaudev.vokab
+        PRODUCT_NAME: vokab
+        MARKETING_VERSION: "0.0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_FILE: Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+        ENABLE_HARDENED_RUNTIME: NO
+        CODE_SIGN_ENTITLEMENTS: vokab.entitlements
+        SWIFT_VERSION: "5.0"
+        DEAD_CODE_STRIPPING: YES
+    # NSServices declaration lives in Info.plist (added in Phase 6).

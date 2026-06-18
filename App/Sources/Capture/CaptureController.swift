@@ -1,0 +1,198 @@
+import Foundation
+import AppKit
+import VokabKit
+
+/// Coordinates a capture from any entry point (menubar field, Services): builds
+/// source context, shows the toast, runs `CaptureService`, and posts a
+/// notification. Serializes captures to honor the concurrency cap.
+@MainActor
+final class CaptureController: ObservableObject {
+    static let shared = CaptureController()
+    var env: AppEnvironment?
+
+    // Caps concurrent captures to settings.maxConcurrent (SPEC §9). Rebuilt if
+    // the limit changes.
+    private var gate: AsyncSemaphore?
+    private var gateLimit = 0
+    /// Last paragraph capture's candidates, so the toast's View can reopen extraction.
+    private var pendingParagraph: (items: [ParagraphItem], source: SourceContext, language: String, rawText: String)?
+
+    private func captureGate(limit: Int) -> AsyncSemaphore {
+        if gate == nil || gateLimit != limit {
+            gate = AsyncSemaphore(max(1, limit))
+            gateLimit = limit
+        }
+        return gate!
+    }
+
+    /// - Parameters:
+    ///   - language: overrides language auto-detection when non-nil.
+    ///   - type: forces the capture type (Auto = nil); from the segmented control.
+    ///   - minLevel: paragraph extraction min CEFR when type resolves to paragraph.
+    func capture(_ text: String, source: SourceContext? = nil,
+                 language languageOverride: String? = nil,
+                 type forcedType: CardType? = nil,
+                 minLevel: CEFR? = nil) {
+        guard let env else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        ToastCenter.shared.corner = env.settings.toastPosition
+        let model = ToastCenter.shared.present()
+        model.meaningLanguage = env.settings.meaningLanguage
+        model.phase = .analyzing(trimmed)
+        model.onView = { [weak self] in self?.openLibrary() }   // word/phrase; paragraph reassigns below
+        model.onUndo = { entryId in
+            try? env.entries.delete(id: entryId)
+            WindowManager.notifyDataChanged()
+            ToastCenter.shared.dismiss(model)
+        }
+
+        let src = source ?? SourceContext(
+            appName: NSWorkspace.shared.frontmostApplication?.localizedName,
+            url: nil, capturedAt: Date())
+        let autoDetect = env.settings.autoDetectLanguage
+        let fallbackLanguage = env.settings.defaultCaptureLanguage
+
+        let gate = captureGate(limit: env.settings.maxConcurrent)
+        Task {
+            await gate.wait()
+            // Language detection (NLP) off the main actor — paragraph-size text
+            // would otherwise block the UI.
+            let language: String
+            if let languageOverride { language = languageOverride }
+            else if autoDetect {
+                let fb = fallbackLanguage
+                language = await Task.detached { LanguageDetector.detect(trimmed, default: fb) }.value
+            }
+            else { language = fallbackLanguage }
+            do {
+                let began = try env.capture.beginCapture(text: trimmed, language: language,
+                                                         source: src, forcedType: forcedType)
+                switch began {
+                case .paragraph:
+                    // Paragraph: fall through to the original async path so the
+                    // extraction window opens as before.
+                    let result = try await env.capture.capture(text: trimmed, language: language,
+                                                               source: src, forcedType: forcedType,
+                                                               minLevelOverride: minLevel)
+                    let summary = Self.summary(result, text: trimmed, env: env)
+                    pendingParagraph = (result.paragraphItems, src, language, trimmed)
+                    model.onView = { [weak self] in self?.reopenExtraction() }
+                    model.phase = .resolved(entry: nil, fallback: summary, wasDuplicate: false)
+                    WindowManager.shared.showExtraction(items: result.paragraphItems, source: src,
+                                                        language: language, rawText: trimmed)
+
+                case .duplicate(let entryId, _):
+                    let entry = try? env.entries.entry(id: entryId)
+                    let dupSummary = entry.map {
+                        Self.summarize(entry: $0, text: trimmed, wasDuplicate: true, env: env)
+                    } ?? trimmed
+                    model.onView = { WindowManager.shared.showCaptureResult(entryId: entryId) }
+                    model.phase = .resolved(entry: entry, fallback: dupSummary, wasDuplicate: true)
+                    WindowManager.notifyDataChanged()
+
+                case .ready(let entryId, _):
+                    let entry = try? env.entries.entry(id: entryId)
+                    let summary = entry.map {
+                        Self.summarize(entry: $0, text: trimmed, wasDuplicate: false, env: env)
+                    } ?? trimmed
+                    model.onView = { WindowManager.shared.showCaptureResult(entryId: entryId) }
+                    model.phase = .resolved(entry: entry, fallback: summary, wasDuplicate: false)
+                    NotificationManager.shared.postResolved(summary: summary, entryId: entryId,
+                                                            wasDuplicate: false)
+                    WindowManager.notifyDataChanged()
+                    Task { await env.prefetcher.prefetch(id: entryId) }
+
+                case .pending(let entryId, _):
+                    // Toast is already showing .analyzing(trimmed). Wire View and
+                    // enqueue background analysis; observer updates when done.
+                    model.onView = { WindowManager.shared.showCaptureResult(entryId: entryId) }
+                    await env.captureWorker.enqueueAnalysis(entryId: entryId)
+                    Task { @MainActor in
+                        for _ in 0..<120 {  // ~30s max
+                            try? await Task.sleep(nanoseconds: 250_000_000)
+                            guard let e = try? env.entries.entry(id: entryId) else { continue }
+                            if e.analysisState == AnalysisState.ready.rawValue {
+                                let summary = Self.summarize(entry: e, text: trimmed, wasDuplicate: false, env: env)
+                                model.phase = .resolved(entry: e, fallback: summary, wasDuplicate: false)
+                                NotificationManager.shared.postResolved(summary: summary, entryId: entryId,
+                                                                        wasDuplicate: false)
+                                WindowManager.notifyDataChanged()
+                                Task { await env.prefetcher.prefetch(id: entryId) }
+                                break
+                            } else if e.analysisState == AnalysisState.failed.rawValue {
+                                model.phase = .error("Phân tích thất bại")
+                                break
+                            }
+                        }
+                    }
+
+                case .blocked(let behavior):
+                    model.phase = .error("Daily quota reached (\(behavior.rawValue)).")
+                }
+            } catch let CaptureError.quotaExceeded(behavior) {
+                model.phase = .error("Daily quota reached (\(behavior.rawValue)).")
+            } catch {
+                model.phase = .error(friendly(error))
+            }
+            await gate.signal()
+            ToastCenter.shared.scheduleDismiss(model, after: 6)
+        }
+    }
+
+    func openLibrary() { WindowManager.shared.showLibrary() }
+    func openEntry(_ id: Int64) { WindowManager.shared.showLibrary(select: id) }
+    func reopenExtraction() {
+        guard let p = pendingParagraph else { openLibrary(); return }
+        WindowManager.shared.showExtraction(items: p.items, source: p.source,
+                                            language: p.language, rawText: p.rawText)
+    }
+
+    func openCaptureResult(_ id: Int64) { WindowManager.shared.showCaptureResult(entryId: id) }
+    func openReview() { WindowManager.shared.showReview() }
+    func openQuickCapture() {
+        // Auto-grab the current selection (synthetic ⌘C) so the field is prefilled
+        // without a manual copy; falls back to the clipboard when not granted.
+        let grabbed = SelectionGrabber.grabSelection()
+        QuickCapture.shared.show(prefill: grabbed)
+    }
+
+    private static func summary(_ result: CaptureResult, text: String, env: AppEnvironment) -> String {
+        if result.type == .paragraphItem {
+            return "\(result.paragraphItems.count) words found in paragraph"
+        }
+        if let id = result.entryId, let entry = try? env.entries.entry(id: id) {
+            return summarize(entry: entry, text: text, wasDuplicate: result.wasDuplicate, env: env)
+        }
+        return text
+    }
+
+    /// Builds the short display string for a resolved word/phrase entry.
+    private static func summarize(entry: Entry, text: String, wasDuplicate: Bool,
+                                   env: AppEnvironment) -> String {
+        let s = CardDecoding.summary(entry, meaningLanguage: env.settings.meaningLanguage)
+        var parts = [text]
+        if let cefr = s.cefr { parts.append(cefr.uppercased()) }
+        if let register = registerHint(entry) { parts.append(register) }
+        let base = parts.joined(separator: " — ")
+        return wasDuplicate ? "\(base) (already saved)" : base
+    }
+
+    private static func registerHint(_ entry: Entry) -> String? {
+        if entry.cardType == .word { return CardDecoding.word(entry)?.register }
+        if entry.cardType == .phrase { return CardDecoding.phrase(entry)?.register }
+        return nil
+    }
+
+    private func friendly(_ error: Error) -> String {
+        switch error {
+        case AgyError.timeout: return "agy timed out."
+        case AgyError.binaryNotFound(let path): return "agy not found at \(path)."
+        case AgyError.nonZeroExit: return "agy returned an error."
+        case AgyError.decodeFailure: return "Couldn't parse agy output."
+        case AgyError.outputTooLarge: return "agy returned too much output."
+        default: return "\(error)"
+        }
+    }
+}

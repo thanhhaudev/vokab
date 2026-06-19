@@ -30,7 +30,14 @@ final class QuickCapture {
 
     private func makePanel(initialText: String) -> NSPanel {
         let src = SourceContext(appName: "Manual entry")
-        let view = QuickCaptureView(initialText: initialText, onSubmit: { [weak self] text, language, type, minLevel in
+        // The header pill should show the user's ACTUAL global hotkey (or nothing
+        // when it's not enabled) — not a hardcoded string.
+        let hotkeyLabel: String? = {
+            guard let s = AppEnvironment.shared?.settings,
+                  s.globalHotkeyEnabled, s.globalHotkeyKeyCode != 0 else { return nil }
+            return GlobalHotkey.label(keyCode: s.globalHotkeyKeyCode, modifiers: s.globalHotkeyModifiers)
+        }()
+        let view = QuickCaptureView(initialText: initialText, hotkeyLabel: hotkeyLabel, onSubmit: { [weak self] text, language, type, minLevel in
             CaptureController.shared.capture(text, source: src,
                                              language: language, type: type, minLevel: minLevel)
             self?.hide()
@@ -62,6 +69,7 @@ final class QuickCapture {
 }
 
 private struct QuickCaptureView: View {
+    let hotkeyLabel: String?
     let onSubmit: (String, String?, CardType?, CEFR?) -> Void
     let onBatch: ([String]) -> Void
     let onCancel: () -> Void
@@ -71,9 +79,14 @@ private struct QuickCaptureView: View {
     @FocusState private var focused: Bool
     @State private var spellIssues: [SpellCheck.Issue] = []
     @State private var forceSubmit = false
+    /// Set right before a programmatic text edit (chip fix / Fix all) so the
+    /// text `onChange` below doesn't wipe the remaining chips.
+    @State private var suppressSpellReset = false
 
-    init(initialText: String = "", onSubmit: @escaping (String, String?, CardType?, CEFR?) -> Void,
+    init(initialText: String = "", hotkeyLabel: String? = nil,
+         onSubmit: @escaping (String, String?, CardType?, CEFR?) -> Void,
          onBatch: @escaping ([String]) -> Void, onCancel: @escaping () -> Void) {
+        self.hotkeyLabel = hotkeyLabel
         self.onSubmit = onSubmit
         self.onBatch = onBatch
         self.onCancel = onCancel
@@ -104,10 +117,14 @@ private struct QuickCaptureView: View {
                 Text(L.t("Quick Capture", "Quick Capture")).font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Theme.textSecondary)
                 Spacer()
-                Text("⌃⌥Space").font(Theme.mono(11)).foregroundStyle(Theme.textTertiary)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: 5))
-                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
+                if let hotkeyLabel {
+                    Text(hotkeyLabel).font(Theme.mono(11)).foregroundStyle(Theme.textTertiary)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: 5))
+                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
+                        .help(L.t("Global hotkey to open Quick Capture (set in Settings)",
+                                  "Phím tắt toàn cục mở Quick Capture (đặt trong Settings)"))
+                }
             }
 
             // MARK: Multi-line TextEditor with placeholder overlay + drag-drop
@@ -123,7 +140,12 @@ private struct QuickCaptureView: View {
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 44, maxHeight: 140)
             }
-            .onChange(of: text) { _, _ in spellIssues = []; forceSubmit = false }
+            .onChange(of: text) { _, _ in
+                // A programmatic chip/Fix-all edit must NOT wipe the other chips;
+                // only a real user edit resets the spell state.
+                if suppressSpellReset { suppressSpellReset = false; return }
+                spellIssues = []; forceSubmit = false
+            }
             .onDrop(of: [.fileURL, .text, .plainText, .utf8PlainText], isTargeted: nil) { providers in
                 handleDrop(providers)
             }
@@ -146,6 +168,7 @@ private struct QuickCaptureView: View {
                         Spacer()
                         if spellIssues.contains(where: { $0.suggestion != nil }) {
                             Button(L.t("Fix all", "Sửa hết")) {
+                                suppressSpellReset = true
                                 text = SpellCheck.fixAll(text, issues: spellIssues); spellIssues = []
                             }.buttonStyle(.plain).font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.accent)
                             Text("·").font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
@@ -159,6 +182,7 @@ private struct QuickCaptureView: View {
                         ForEach(spellIssues) { issue in
                             Button {
                                 guard issue.suggestion != nil else { return }
+                                suppressSpellReset = true
                                 text = SpellCheck.fixAll(text, issues: [issue])
                                 spellIssues.removeAll { $0.id == issue.id }
                             } label: {

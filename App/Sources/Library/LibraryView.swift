@@ -46,12 +46,12 @@ struct LibraryView: View {
         GeometryReader { geo in
             // Clamp stored widths to the actual window so the panes never overflow
             // (overflow centred the HStack and clipped the sidebar's left edge).
-            // detail takes whatever remains (>= ~200) and the row pins leading so
-            // the sidebar is never cut off.
+            // detail takes whatever remains (>= ~380 so the word card reads well)
+            // and the row pins leading so the sidebar is never cut off.
             let gap: CGFloat = 12               // two dividers
             let avail = geo.size.width
-            let sw = max(150, min(CGFloat(sidebarWidth), avail - gap - 240 - 200))
-            let mw = max(240, min(CGFloat(mainWidth), avail - gap - sw - 200))
+            let sw = max(150, min(CGFloat(sidebarWidth), avail - gap - 240 - 380))
+            let mw = max(240, min(CGFloat(mainWidth), avail - gap - sw - 380))
             HStack(spacing: 0) {
                 sidebar.frame(width: sw)
                 ResizableDivider(width: $sidebarWidth, range: 150...300) { storedSidebarWidth = $0 }
@@ -483,11 +483,17 @@ struct LibraryView: View {
             }
             .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 6)
 
-            HStack {
-                SecLabel("\(model.filterTitle) · \(visibleRows.count)")
-                Spacer()
+            // The active filter + its count already show (highlighted) in the
+            // sidebar, so we don't repeat them here. While text-filtering we do
+            // show a live result count, which the sidebar can't.
+            if !search.isEmpty {
+                HStack {
+                    Text(L.t("\(visibleRows.count) results", "\(visibleRows.count) kết quả"))
+                        .font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
+                    Spacer()
+                }
+                .padding(.horizontal, 16).padding(.bottom, 6).padding(.top, 2)
             }
-            .padding(.horizontal, 16).padding(.bottom, 8).padding(.top, 2)
 
             list
 
@@ -514,7 +520,7 @@ struct LibraryView: View {
     private var filterField: some View {
         HStack(spacing: 7) {
             Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(Theme.textTertiary)
-            TextField(L.t("Filter words…", "Lọc từ…"), text: $search)
+            TextField(L.t("Filter…", "Lọc…"), text: $search)
                 .textFieldStyle(.plain).font(.system(size: 13)).focused($filterFocused)
             if !search.isEmpty {
                 Button { search = "" } label: {

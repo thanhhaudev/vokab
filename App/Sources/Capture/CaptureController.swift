@@ -16,6 +16,15 @@ final class CaptureController: ObservableObject {
     private var gateLimit = 0
     /// Last paragraph capture's candidates, so the toast's View can reopen extraction.
     private var pendingParagraph: (items: [ParagraphItem], source: SourceContext, language: String, rawText: String)?
+    /// Per-entry toast updaters, fired by `entryCompleted` when background analysis finishes.
+    private var pendingToasts: [Int64: @MainActor (CaptureService.AnalysisOutcome) -> Void] = [:]
+
+    /// Called by CaptureWorker (via AppEnvironment) when an entry's analysis finishes;
+    /// updates the toast that was registered for it in the `.pending` case.
+    @MainActor func entryCompleted(_ id: Int64, _ outcome: CaptureService.AnalysisOutcome) {
+        guard let handler = pendingToasts.removeValue(forKey: id) else { return }
+        handler(outcome)
+    }
 
     private func captureGate(limit: Int) -> AsyncSemaphore {
         if gate == nil || gateLimit != limit {
@@ -106,25 +115,26 @@ final class CaptureController: ObservableObject {
 
                 case .pending(let entryId, _):
                     // Toast is already showing .analyzing(trimmed). Wire View and
-                    // enqueue background analysis; observer updates when done.
+                    // enqueue background analysis; the worker fires `entryCompleted`
+                    // (via the registered handler) when done — no polling.
                     model.onView = { WindowManager.shared.showCaptureResult(entryId: entryId) }
                     await env.captureWorker.enqueueAnalysis(entryId: entryId)
-                    Task { @MainActor in
-                        for _ in 0..<120 {  // ~30s max
-                            try? await Task.sleep(nanoseconds: 250_000_000)
-                            guard let e = try? env.entries.entry(id: entryId) else { continue }
-                            if e.analysisState == AnalysisState.ready.rawValue {
+                    pendingToasts[entryId] = { [weak self] outcome in
+                        guard let self, let env = self.env else { return }
+                        switch outcome {
+                        case .ready:
+                            if let e = try? env.entries.entry(id: entryId) {
                                 let summary = Self.summarize(entry: e, text: trimmed, wasDuplicate: false, env: env)
                                 model.phase = .resolved(entry: e, fallback: summary, wasDuplicate: false)
                                 NotificationManager.shared.postResolved(summary: summary, entryId: entryId,
                                                                         wasDuplicate: false)
                                 WindowManager.notifyDataChanged()
                                 Task { await env.prefetcher.prefetch(id: entryId) }
-                                break
-                            } else if e.analysisState == AnalysisState.failed.rawValue {
-                                model.phase = .error("Phân tích thất bại")
-                                break
                             }
+                        case .failed:
+                            model.phase = .error("Phân tích thất bại")
+                        default:
+                            break   // skipped: leave the toast as-is
                         }
                     }
 

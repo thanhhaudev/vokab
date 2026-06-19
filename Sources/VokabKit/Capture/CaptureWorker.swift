@@ -6,16 +6,19 @@ public actor CaptureWorker {
     private let gate: AsyncSemaphore
     private let onChange: @Sendable () -> Void
     private let onFailure: (@Sendable (Int64) -> Void)?
+    private let onComplete: (@Sendable (Int64, CaptureService.AnalysisOutcome) -> Void)?
     private var inflight = Set<Int64>()
     private var tasks: [Int64: Task<Void, Never>] = [:]
 
     public init(capture: CaptureService, maxConcurrent: Int = 2,
                 onChange: @escaping @Sendable () -> Void,
-                onFailure: (@Sendable (Int64) -> Void)? = nil) {
+                onFailure: (@Sendable (Int64) -> Void)? = nil,
+                onComplete: (@Sendable (Int64, CaptureService.AnalysisOutcome) -> Void)? = nil) {
         self.capture = capture
         self.gate = AsyncSemaphore(max(1, maxConcurrent))
         self.onChange = onChange
         self.onFailure = onFailure
+        self.onComplete = onComplete
     }
 
     /// Lên lịch phân tích một entry pending. Coalesce: bỏ qua nếu đang chạy.
@@ -39,6 +42,7 @@ public actor CaptureWorker {
         tasks[id] = nil
         onChange()
         if outcome == .failed { onFailure?(id) }
+        onComplete?(id, outcome)
     }
 
     /// Test helper: chờ mọi job đã enqueue hoàn tất.

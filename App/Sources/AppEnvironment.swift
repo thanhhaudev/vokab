@@ -23,6 +23,7 @@ final class AppEnvironment: ObservableObject {
     let categories: CategoryService
     let capture: CaptureService
     let enrichment: EnrichmentService
+    let batchEnricher: BatchEnricher
     let prefetcher: EnrichmentPrefetcher
     let categoryBackfiller: CategoryBackfiller
     let relationsBackfiller: RelationsBackfiller
@@ -50,8 +51,12 @@ final class AppEnvironment: ObservableObject {
         self.capture = CaptureService(agy: agy, entries: entries, cache: cache,
                                       quota: quota, categories: categories, settings: settings)
         self.enrichment = EnrichmentService(agy: agy, entries: entries)
+        self.batchEnricher = BatchEnricher(
+            agy: agy, entries: entries, fallback: self.enrichment,
+            onChange: { Task { @MainActor in WindowManager.notifyDataChanged() } })
         self.prefetcher = EnrichmentPrefetcher(
             enrichment: self.enrichment, entries: entries,
+            batchEnricher: self.batchEnricher,
             onChange: { Task { @MainActor in WindowManager.notifyDataChanged() } })
         self.categoryBackfiller = CategoryBackfiller(agy: agy, entries: entries, categories: categories)
         self.relationsBackfiller = RelationsBackfiller(agy: agy, entries: entries)
@@ -66,6 +71,9 @@ final class AppEnvironment: ObservableObject {
                     let word = ((try? entries.entry(id: entryId)) ?? nil)?.rawText ?? ""
                     NotificationManager.shared.postFailed(word: word, entryId: entryId)
                 }
+            },
+            onComplete: { id, outcome in
+                Task { @MainActor in CaptureController.shared.entryCompleted(id, outcome) }
             })
     }
 

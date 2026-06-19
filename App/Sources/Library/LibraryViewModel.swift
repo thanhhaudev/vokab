@@ -41,6 +41,7 @@ final class LibraryViewModel: ObservableObject {
     @Published private(set) var quotaUsed = 0
     @Published private(set) var quotaLimit = 0
     @Published private(set) var diskBytes: Int64 = 0
+    // Dashboard insight series (populated in load()).
     // Antigravity real quota
     @Published var antigravityQuota: AntigravityQuotaSummary?
     @Published var quotaReloading = false

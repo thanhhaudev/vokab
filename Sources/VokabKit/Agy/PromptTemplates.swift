@@ -87,6 +87,38 @@ public enum PromptTemplates {
         """
     }
 
+    /// Batched word enrichment, part A (extras) — one agy call for many words.
+    /// Returns a JSON ARRAY; each element mirrors `wordEnrichExtras` plus the
+    /// exact input `word` so callers can key the result.
+    public static func wordExtrasBatch(words: [String], language: String) -> String {
+        let list = words.map { "\"\($0)\"" }.joined(separator: ", ")
+        return """
+        For EACH of these words (language: \(language)): [\(list)]
+        return ONLY a JSON ARRAY, one object per word:
+        [{word, etymology, frequency, examples[]}]
+        "word" MUST be the exact input word. examples[] = 2 example sentences.
+        No preamble, no markdown fence.
+        """
+    }
+
+    /// Batched word enrichment, part B (relations) — one agy call for many words.
+    /// Returns a JSON ARRAY; each element mirrors `wordEnrichRelations` plus the
+    /// exact input `word`.
+    public static func wordRelationsBatch(words: [String], language: String) -> String {
+        let list = words.map { "\"\($0)\"" }.joined(separator: ", ")
+        return """
+        For EACH of these words (language: \(language)): [\(list)]
+        return ONLY a JSON ARRAY, one object per word:
+        [{word, synonyms[], antonyms[], word_family[], collocations[], confusables[], context_of_use, grammar_note}]
+        "word" MUST be the exact input word.
+        collocations[] = 3–5 common collocations (e.g. "make a decision").
+        confusables[] = [{word, note_vi}] easily-confused words, each with a short Vietnamese note on the difference.
+        context_of_use: 1–2 sentence Vietnamese learner note on the situation/context to use this word (formal/informal nuance, domain, when/where).
+        grammar_note: 1–2 sentence Vietnamese note on grammar/tense (for verbs: tenses typically used in, irregular forms; for nouns: countable/uncountable).
+        No preamble, no markdown fence.
+        """
+    }
+
     /// Lightweight backfill of just the two newer relation fields for entries
     /// enriched before they existed (analog of `classify`).
     public static func wordRelationsBackfill(_ word: String, language: String) -> String {

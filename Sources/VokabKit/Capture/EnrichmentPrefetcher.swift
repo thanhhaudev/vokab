@@ -8,18 +8,25 @@ import Foundation
 public actor EnrichmentPrefetcher {
     private let enrichment: EnrichmentService
     private let entries: EntryRepository
+    private let batchEnricher: BatchEnricher?
     private let gate: AsyncSemaphore
     private let onChange: @Sendable () -> Void
 
     /// - Parameters:
     ///   - maxConcurrent: max simultaneous background enrichments (default 1 —
     ///     background work, no rush; foreground captures keep priority).
+    ///   - batchEnricher: when set, WORD entries are routed through it so ids
+    ///     captured close together share batched agy calls (the coalescer falls
+    ///     back to `enrichment` per item for anything it can't cover). PHRASES
+    ///     always take the per-item `enrichment` path.
     ///   - onChange: called after each entry is successfully enriched, so the UI
     ///     can refresh. Must be safe to call from a background context.
     public init(enrichment: EnrichmentService, entries: EntryRepository,
+                batchEnricher: BatchEnricher? = nil,
                 maxConcurrent: Int = 1, onChange: @escaping @Sendable () -> Void) {
         self.enrichment = enrichment
         self.entries = entries
+        self.batchEnricher = batchEnricher
         self.gate = AsyncSemaphore(max(1, maxConcurrent))
         self.onChange = onChange
     }
@@ -35,6 +42,14 @@ public actor EnrichmentPrefetcher {
     }
 
     private func run(id: Int64) async {
+        // WORD entries go through the coalescer (batched agy calls); it owns its
+        // own concurrency + onChange and falls back to `enrichment` per item.
+        // PHRASES (and the no-batcher case) take the per-item path under the gate.
+        if let batchEnricher, let entry = (try? entries.entry(id: id)) ?? nil,
+           entry.cardType == .word {
+            await batchEnricher.submit(id: id)
+            return
+        }
         await gate.wait()
         let entry = try? entries.entry(id: id)
         if let entry {

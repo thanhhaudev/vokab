@@ -22,7 +22,9 @@ public actor RelationsBackfiller {
         guard let fresh = try entries.entry(id: id) else { return nil }
         guard fresh.cardType == .word else { return fresh }
         let card = (try? JSONCleaning.decode(WordCard.self, from: fresh.aiResult)) ?? Self.emptyWord
-        guard card.collocations.isEmpty && card.confusables.isEmpty else { return fresh }
+        let needsBackfill = (card.collocations.isEmpty && card.confusables.isEmpty)
+            || card.contextOfUse == nil || card.grammarNote == nil
+        guard needsBackfill else { return fresh }
         if let existing = inFlight[id] { return try await existing.value }
 
         let task = Task<Entry?, Error> { try await self.perform(fresh, id: id, card: card) }

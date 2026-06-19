@@ -76,6 +76,8 @@ public struct WordCard: Codable, Sendable, Equatable {
     public var collocations: [String]
     public var confusables: [Confusable]
     public var category: String?
+    public var contextOfUse: String?
+    public var grammarNote: String?
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: GenericKey.self)
@@ -96,6 +98,8 @@ public struct WordCard: Codable, Sendable, Equatable {
                                                       forKey: GenericKey(stringValue: "confusables")!)) ?? nil ?? []
         confusables = rawConfusables.filter { !$0.word.trimmingCharacters(in: .whitespaces).isEmpty }
         category = decodeString(c, "category")
+        contextOfUse = decodeString(c, "contextOfUse")
+        grammarNote = decodeString(c, "grammarNote")
     }
 
     /// Returns a copy where each field keeps `self`'s value when present, else
@@ -114,6 +118,8 @@ public struct WordCard: Codable, Sendable, Equatable {
         if collocations.isEmpty { c.collocations = other.collocations }
         if confusables.isEmpty { c.confusables = other.confusables }
         c.category = pick(category, other.category)
+        c.contextOfUse = pick(contextOfUse, other.contextOfUse)
+        c.grammarNote = pick(grammarNote, other.grammarNote)
         return c
     }
 }
@@ -155,6 +161,8 @@ public struct PhraseCard: Codable, Sendable, Equatable {
     public var commonErrors: [ErrorQuiz]
     public var relatedPhrases: [String]
     public var category: String?
+    public var contextOfUse: String?
+    public var grammarNote: String?
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: GenericKey.self)
@@ -175,6 +183,8 @@ public struct PhraseCard: Codable, Sendable, Equatable {
         commonErrors = rawErrors.filter { !$0.sentence.isEmpty && !$0.answer.isEmpty }
         relatedPhrases = decodeArray(c, "relatedPhrases")
         category = decodeString(c, "category")
+        contextOfUse = decodeString(c, "contextOfUse")
+        grammarNote = decodeString(c, "grammarNote")
     }
 
     /// Returns a copy where each field keeps `self`'s value when present, else
@@ -193,6 +203,8 @@ public struct PhraseCard: Codable, Sendable, Equatable {
         if commonErrors.isEmpty { c.commonErrors = other.commonErrors }
         if relatedPhrases.isEmpty { c.relatedPhrases = other.relatedPhrases }
         c.category = pick(category, other.category)
+        c.contextOfUse = pick(contextOfUse, other.contextOfUse)
+        c.grammarNote = pick(grammarNote, other.grammarNote)
         return c
     }
 }

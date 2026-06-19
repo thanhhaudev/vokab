@@ -78,9 +78,11 @@ public enum PromptTemplates {
     public static func wordEnrichRelations(_ word: String, language: String) -> String {
         """
         For '\(word)' (language: \(language)) return ONLY JSON:
-        {synonyms[], antonyms[], word_family[], collocations[], confusables[]}
+        {synonyms[], antonyms[], word_family[], collocations[], confusables[], context_of_use, grammar_note}
         collocations[] = 3–5 common collocations (e.g. "make a decision").
         confusables[] = [{word, note_vi}] easily-confused words, each with a short Vietnamese note on the difference.
+        context_of_use: 1–2 sentence Vietnamese learner note on the situation/context to use this word (formal/informal nuance, domain, when/where).
+        grammar_note: 1–2 sentence Vietnamese note on grammar/tense (for verbs: tenses typically used in, irregular forms; for nouns: countable/uncountable).
         No preamble, no markdown fence.
         """
     }
@@ -90,9 +92,11 @@ public enum PromptTemplates {
     public static func wordRelationsBackfill(_ word: String, language: String) -> String {
         """
         For '\(word)' (language: \(language)) return ONLY JSON:
-        {collocations[], confusables[]}
+        {collocations[], confusables[], context_of_use, grammar_note}
         collocations[] = 3–5 common collocations (e.g. "make a decision").
         confusables[] = [{word, note_vi}] easily-confused words, each with a short Vietnamese note on the difference.
+        context_of_use: 1–2 sentence Vietnamese learner note on the situation/context to use this word (formal/informal nuance, domain, when/where).
+        grammar_note: 1–2 sentence Vietnamese note on grammar/tense (for verbs: tenses typically used in, irregular forms; for nouns: countable/uncountable).
         No preamble, no markdown fence.
         """
     }
@@ -122,11 +126,13 @@ public enum PromptTemplates {
     public static func phraseEnrichRelations(_ phrase: String) -> String {
         """
         For the phrase '\(phrase)' return ONLY JSON:
-        {variations[], common_errors[], related_phrases[]}
+        {variations[], common_errors[], related_phrases[], context_of_use, grammar_note}
         common_errors[] = [{sentence, answer, options[], note_vi}] where sentence
         contains "_____" at the error position, answer is the correct span, options
         is 3–4 choices including answer + the common wrong form, note_vi is a short
         Vietnamese explanation.
+        context_of_use: 1–2 sentence Vietnamese learner note on the situation/context to use this phrase (formal/informal nuance, domain, when/where).
+        grammar_note: 1–2 sentence Vietnamese note on the grammatical pattern and tense this phrase is typically used in.
         No preamble, no markdown fence.
         """
     }
@@ -136,11 +142,13 @@ public enum PromptTemplates {
     public static func phraseErrorsBackfill(_ phrase: String) -> String {
         """
         For the phrase '\(phrase)' return ONLY JSON:
-        {common_errors[]}
+        {common_errors[], context_of_use, grammar_note}
         common_errors[] = [{sentence, answer, options[], note_vi}] where sentence
         contains "_____" at the error position, answer is the correct span, options
         is 3–4 choices including answer + the common wrong form, note_vi is a short
         Vietnamese explanation.
+        context_of_use: 1–2 sentence Vietnamese learner note on the situation/context to use this phrase (formal/informal nuance, domain, when/where).
+        grammar_note: 1–2 sentence Vietnamese note on the grammatical pattern and tense this phrase is typically used in.
         No preamble, no markdown fence.
         """
     }

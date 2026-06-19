@@ -38,6 +38,8 @@ struct PhraseDetailView: View {
                         Hairline()
                         seenIn
                         twoColumns
+                        contextOfUseSection
+                        grammarSection
                         tabs
                         tabContent
                     }
@@ -61,7 +63,8 @@ struct PhraseDetailView: View {
                 current.category = backfilled
                 WindowManager.notifyDataChanged()
             }
-            if current.cardType == .phrase, let c = CardDecoding.phrase(current), c.commonErrors.isEmpty,
+            if current.cardType == .phrase, let c = CardDecoding.phrase(current),
+               c.commonErrors.isEmpty || c.contextOfUse == nil || c.grammarNote == nil,
                let updated = try? await env.phraseErrorBackfiller.backfill(entry: current) {
                 current = updated
                 WindowManager.notifyDataChanged()
@@ -261,6 +264,36 @@ struct PhraseDetailView: View {
                     .font(.system(size: 13)).lineSpacing(3)
                     .padding(.leading, 10)
                     .overlay(alignment: .leading) { Rectangle().fill(Theme.accent).frame(width: 2) }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+        }
+    }
+
+    // MARK: Context of use
+
+    @ViewBuilder private var contextOfUseSection: some View {
+        if let text = card?.contextOfUse, !text.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                SecLabel(L.t("Context of use", "Bối cảnh dùng"))
+                Text(text)
+                    .font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineSpacing(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+        }
+    }
+
+    // MARK: Grammar & tense
+
+    @ViewBuilder private var grammarSection: some View {
+        if let text = card?.grammarNote, !text.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                SecLabel(L.t("Grammar & tense", "Ngữ pháp & thì"))
+                Text(text)
+                    .font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineSpacing(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

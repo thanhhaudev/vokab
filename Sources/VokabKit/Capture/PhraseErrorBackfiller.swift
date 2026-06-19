@@ -16,7 +16,8 @@ public actor PhraseErrorBackfiller {
         guard let fresh = try entries.entry(id: id) else { return nil }
         guard fresh.cardType == .phrase else { return fresh }
         let card = (try? JSONCleaning.decode(PhraseCard.self, from: fresh.aiResult)) ?? Self.emptyPhrase
-        guard card.commonErrors.isEmpty else { return fresh }
+        let needsBackfill = card.commonErrors.isEmpty || card.contextOfUse == nil || card.grammarNote == nil
+        guard needsBackfill else { return fresh }
         if let existing = inFlight[id] { return try await existing.value }
 
         let task = Task<Entry?, Error> { try await self.perform(fresh, id: id, card: card) }

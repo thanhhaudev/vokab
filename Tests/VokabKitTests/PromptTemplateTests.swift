@@ -71,6 +71,30 @@ final class PromptTemplateTests: XCTestCase {
         XCTAssertFalse(p.contains("related_phrases"))
     }
 
+    func testWordEnrichRelationsIncludesContextOfUseAndGrammarNote() {
+        let p = PromptTemplates.wordEnrichRelations("decide", language: "en")
+        XCTAssertTrue(p.contains("context_of_use"))
+        XCTAssertTrue(p.contains("grammar_note"))
+    }
+
+    func testWordRelationsBackfillIncludesContextOfUseAndGrammarNote() {
+        let p = PromptTemplates.wordRelationsBackfill("decide", language: "en")
+        XCTAssertTrue(p.contains("context_of_use"))
+        XCTAssertTrue(p.contains("grammar_note"))
+    }
+
+    func testPhraseEnrichRelationsIncludesContextOfUseAndGrammarNote() {
+        let p = PromptTemplates.phraseEnrichRelations("give up")
+        XCTAssertTrue(p.contains("context_of_use"))
+        XCTAssertTrue(p.contains("grammar_note"))
+    }
+
+    func testPhraseErrorsBackfillIncludesContextOfUseAndGrammarNote() {
+        let p = PromptTemplates.phraseErrorsBackfill("give up")
+        XCTAssertTrue(p.contains("context_of_use"))
+        XCTAssertTrue(p.contains("grammar_note"))
+    }
+
     func testTranslatePromptShape() {
         let p = PromptTemplates.translate("Hello world.", language: "Vietnamese")
         XCTAssertTrue(p.contains("translation"))

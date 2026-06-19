@@ -32,4 +32,48 @@ final class CardMergeTests: XCTestCase {
         let other = try JSONCleaning.decode(WordCard.self, from: #"{"category":"Science"}"#)
         XCTAssertEqual(core.merging(other).category, "Science")
     }
+
+    func testWordMergingFillsContextOfUseAndGrammarNoteFromOther() throws {
+        let base = try JSONCleaning.decode(WordCard.self, from: #"{"meaning_vi":"x"}"#)
+        let other = try JSONCleaning.decode(WordCard.self, from: #"""
+            {"context_of_use":"Dùng trong văn trang trọng.","grammar_note":"Thường dùng thì hiện tại hoàn thành."}
+        """#)
+        let merged = base.merging(other)
+        XCTAssertEqual(merged.contextOfUse, "Dùng trong văn trang trọng.")
+        XCTAssertEqual(merged.grammarNote, "Thường dùng thì hiện tại hoàn thành.")
+    }
+
+    func testWordMergingKeepsSelfContextOfUseAndGrammarNote() throws {
+        let base = try JSONCleaning.decode(WordCard.self, from: #"""
+            {"context_of_use":"Giữ giá trị gốc.","grammar_note":"Ghi chú gốc."}
+        """#)
+        let other = try JSONCleaning.decode(WordCard.self, from: #"""
+            {"context_of_use":"Giá trị khác.","grammar_note":"Ghi chú khác."}
+        """#)
+        let merged = base.merging(other)
+        XCTAssertEqual(merged.contextOfUse, "Giữ giá trị gốc.")
+        XCTAssertEqual(merged.grammarNote, "Ghi chú gốc.")
+    }
+
+    func testPhraseMergingFillsContextOfUseAndGrammarNoteFromOther() throws {
+        let base = try JSONCleaning.decode(PhraseCard.self, from: #"{"meaning_vi":"y"}"#)
+        let other = try JSONCleaning.decode(PhraseCard.self, from: #"""
+            {"context_of_use":"Dùng trong giao tiếp thường ngày.","grammar_note":"Theo sau V-ing."}
+        """#)
+        let merged = base.merging(other)
+        XCTAssertEqual(merged.contextOfUse, "Dùng trong giao tiếp thường ngày.")
+        XCTAssertEqual(merged.grammarNote, "Theo sau V-ing.")
+    }
+
+    func testPhraseMergingKeepsSelfContextOfUseAndGrammarNote() throws {
+        let base = try JSONCleaning.decode(PhraseCard.self, from: #"""
+            {"context_of_use":"Bối cảnh gốc.","grammar_note":"Ngữ pháp gốc."}
+        """#)
+        let other = try JSONCleaning.decode(PhraseCard.self, from: #"""
+            {"context_of_use":"Bối cảnh khác.","grammar_note":"Ngữ pháp khác."}
+        """#)
+        let merged = base.merging(other)
+        XCTAssertEqual(merged.contextOfUse, "Bối cảnh gốc.")
+        XCTAssertEqual(merged.grammarNote, "Ngữ pháp gốc.")
+    }
 }

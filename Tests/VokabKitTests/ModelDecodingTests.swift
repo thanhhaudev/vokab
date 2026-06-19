@@ -126,4 +126,44 @@ final class ModelDecodingTests: XCTestCase {
         let item = try JSONCleaning.decode(ParagraphItem.self, from: json)
         XCTAssertEqual(item.category, "Technology")
     }
+
+    func testWordCardDecodesContextOfUseAndGrammarNote() throws {
+        let json = #"""
+        {
+          "meaning_vi": "quyết định",
+          "context_of_use": "Dùng trong văn viết trang trọng và các tình huống nghề nghiệp.",
+          "grammar_note": "Thường dùng với thì hiện tại đơn và hiện tại hoàn thành."
+        }
+        """#
+        let card = try JSONCleaning.decode(WordCard.self, from: json)
+        XCTAssertEqual(card.contextOfUse, "Dùng trong văn viết trang trọng và các tình huống nghề nghiệp.")
+        XCTAssertEqual(card.grammarNote, "Thường dùng với thì hiện tại đơn và hiện tại hoàn thành.")
+    }
+
+    func testPhraseCardDecodesContextOfUseAndGrammarNote() throws {
+        let json = #"""
+        {
+          "meaning_vi": "từ bỏ",
+          "context_of_use": "Dùng trong giao tiếp hàng ngày và văn nói không trang trọng.",
+          "grammar_note": "Theo sau bởi danh từ hoặc V-ing; thường dùng với thì quá khứ đơn."
+        }
+        """#
+        let card = try JSONCleaning.decode(PhraseCard.self, from: json)
+        XCTAssertEqual(card.contextOfUse, "Dùng trong giao tiếp hàng ngày và văn nói không trang trọng.")
+        XCTAssertEqual(card.grammarNote, "Theo sau bởi danh từ hoặc V-ing; thường dùng với thì quá khứ đơn.")
+    }
+
+    func testWordCardContextFieldsNilWhenAbsent() throws {
+        let json = #"{"meaning_vi":"x"}"#
+        let card = try JSONCleaning.decode(WordCard.self, from: json)
+        XCTAssertNil(card.contextOfUse)
+        XCTAssertNil(card.grammarNote)
+    }
+
+    func testPhraseCardContextFieldsNilWhenAbsent() throws {
+        let json = #"{"meaning_vi":"y"}"#
+        let card = try JSONCleaning.decode(PhraseCard.self, from: json)
+        XCTAssertNil(card.contextOfUse)
+        XCTAssertNil(card.grammarNote)
+    }
 }

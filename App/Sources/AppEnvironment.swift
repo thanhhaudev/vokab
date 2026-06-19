@@ -66,6 +66,9 @@ final class AppEnvironment: ObservableObject {
                     let word = ((try? entries.entry(id: entryId)) ?? nil)?.rawText ?? ""
                     NotificationManager.shared.postFailed(word: word, entryId: entryId)
                 }
+            },
+            onComplete: { id, outcome in
+                Task { @MainActor in CaptureController.shared.entryCompleted(id, outcome) }
             })
     }
 

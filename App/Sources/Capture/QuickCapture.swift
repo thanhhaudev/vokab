@@ -244,7 +244,10 @@ private struct QuickCaptureView: View {
     private func submit() {
         let captured = trimmed                 // snapshot BEFORE clearing text
         guard !captured.isEmpty else { return }
-        if !forceSubmit {
+        // Spell-check gate: word/phrase/batch only. Paragraphs go to extraction
+        // (you're harvesting words, not the sentence) and are full of proper nouns
+        // — checking them just produces noise, so skip.
+        if !forceSubmit && !isParagraph {
             let issues = SpellCheck.issues(in: captured, language: detectedLang)
             if !issues.isEmpty { spellIssues = issues; return }   // show confirm, don't submit yet
         }

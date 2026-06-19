@@ -186,11 +186,14 @@ final class CaptureController: ObservableObject {
         // grabbing from (the non-activating panel won't change frontmost). This
         // is the entry's "seen in" context (SPEC §4); without it every hotkey
         // capture was wrongly attributed to "Manual entry".
-        let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
+        let front = NSWorkspace.shared.frontmostApplication
+        let sourceApp = front?.localizedName
+        // If it's a browser, also record the active tab URL (Automation permission).
+        let sourceURL = BrowserURL.currentURL(forBundleID: front?.bundleIdentifier)
         // Auto-grab the current selection (synthetic ⌘C) so the field is prefilled
         // without a manual copy; falls back to the clipboard when not granted.
         let grabbed = SelectionGrabber.grabSelection()
-        QuickCapture.shared.show(prefill: grabbed, source: sourceApp)
+        QuickCapture.shared.show(prefill: grabbed, source: sourceApp, sourceURL: sourceURL)
     }
 
     private static func summary(_ result: CaptureResult, text: String, env: AppEnvironment) -> String {

@@ -19,27 +19,6 @@ public struct ReviewLogRepository: Sendable {
         }
     }
 
-    /// Number of reviews recorded on `date`'s calendar day (0 if none).
-    public func count(on date: Date, calendar: Calendar = .current) throws -> Int {
-        let day = TextKey.dayString(date, calendar: calendar)
-        return try dbQueue.read { db in
-            try Int.fetchOne(db, sql: "SELECT count FROM review_log WHERE day = ?", arguments: [day]) ?? 0
-        }
-    }
-
-    /// day-string → review count for every recorded day within [from, to] (inclusive).
-    /// Days with no row are simply absent (caller fills zeros).
-    public func dailyCounts(from: Date, to: Date, calendar: Calendar = .current) throws -> [String: Int] {
-        var lo = TextKey.dayString(from, calendar: calendar)
-        var hi = TextKey.dayString(to, calendar: calendar)
-        if lo > hi { swap(&lo, &hi) }   // day-strings are yyyy-MM-dd: lexicographic == chronological
-        return try dbQueue.read { db in
-            try Row.fetchAll(db, sql: "SELECT day, count FROM review_log WHERE day >= ? AND day <= ?",
-                             arguments: [lo, hi])
-                .reduce(into: [:]) { acc, row in acc[row["day"]] = row["count"] }
-        }
-    }
-
     /// Current streak: consecutive days with ≥1 review, ending today (or
     /// yesterday if nothing has been reviewed yet today).
     public func streak(asOf now: Date = Date(), calendar: Calendar = .current) throws -> Int {

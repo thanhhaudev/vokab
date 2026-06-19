@@ -235,7 +235,7 @@ struct LibraryView: View {
     }
 
     private func levelChip(_ level: String, count: Int) -> some View {
-        let on = model.filter == .cefr(level)
+        let on = !showDashboard && model.filter == .cefr(level)
         return Button { select(on ? .all : .cefr(level)) } label: {
             HStack(spacing: 4) {
                 Text(level.uppercased()).font(.system(size: 11, weight: .medium))
@@ -422,7 +422,7 @@ struct LibraryView: View {
     }
 
     private func navItem(_ title: String, system: String, count: Int, filter: LibraryFilter) -> some View {
-        let on = model.filter == filter
+        let on = !showDashboard && model.filter == filter
         return Button { select(filter) } label: {
             HStack(spacing: 9) {
                 Image(systemName: system).font(.system(size: 13)).frame(width: 16)
@@ -444,7 +444,7 @@ struct LibraryView: View {
     /// `nil` explicitly for the colorless Uncategorized group.
     private func categoryItem(_ title: String, count: Int, filter: LibraryFilter,
                               colorIndex: Int? = -1) -> some View {
-        let on = model.filter == filter
+        let on = !showDashboard && model.filter == filter
         let idx = (colorIndex == -1) ? model.categoryColorIndex[title] : colorIndex
         return Button { select(filter) } label: {
             HStack(spacing: 8) {

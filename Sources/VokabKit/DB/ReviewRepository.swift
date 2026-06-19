@@ -71,22 +71,6 @@ public struct ReviewRepository: Sendable {
         try dbQueue.write { db in try state.update(db) }
     }
 
-    /// offset-in-days (0 ..< days) → number of cards whose due_date falls on that
-    /// calendar day, counting from startOfDay(now). Overdue (< today) folds into 0.
-    public func dueForecast(days: Int, asOf now: Date = Date(), calendar: Calendar = .current) throws -> [Int: Int] {
-        let dueDates: [Date] = try dbQueue.read { db in
-            try Date.fetchAll(db, sql: "SELECT due_date FROM review_state")
-        }
-        let start = calendar.startOfDay(for: now)
-        var result: [Int: Int] = [:]
-        for due in dueDates {
-            let d = calendar.dateComponents([.day], from: start, to: calendar.startOfDay(for: due)).day ?? 0
-            let bucket = max(0, d)
-            if bucket < days { result[bucket, default: 0] += 1 }
-        }
-        return result
-    }
-
     /// Count of cards due on or before `date`.
     /// Only entries with `analysis_state = 'ready'` are counted.
     public func dueCount(on date: Date) throws -> Int {

@@ -30,6 +30,15 @@ public enum ReviewGrade: Int, Codable, Sendable, CaseIterable {
     case hard = 1
     case good = 2
     case easy = 3
+
+    public var displayName: String {
+        switch self {
+        case .again: return "Again"
+        case .hard:  return "Hard"
+        case .good:  return "Good"
+        case .easy:  return "Easy"
+        }
+    }
 }
 
 /// Lifecycle state for async capture: entry is inserted immediately as `analyzing`,

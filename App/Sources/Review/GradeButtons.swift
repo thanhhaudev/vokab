@@ -12,10 +12,10 @@ struct GradeButtons: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            srButton("Again", .again, preview[.again])
-            srButton("Hard",  .hard,  preview[.hard])
-            srButton("Good",  .good,  preview[.good])
-            srButton("Easy",  .easy,  preview[.easy])
+            srButton(ReviewGrade.again.displayName, .again, preview[.again])
+            srButton(ReviewGrade.hard.displayName,  .hard,  preview[.hard])
+            srButton(ReviewGrade.good.displayName,  .good,  preview[.good])
+            srButton(ReviewGrade.easy.displayName,  .easy,  preview[.easy])
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
         .overlay(alignment: .top) { Hairline() }

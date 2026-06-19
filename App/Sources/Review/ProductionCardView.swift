@@ -128,7 +128,7 @@ struct ProductionCardView: View {
     private func sugButton(_ grade: ReviewGrade) -> some View {
         let suggested = feedback?.suggestedGrade == grade
         return Button { onGrade(grade) } label: {
-            Text(label(grade) + (suggested ? " ✓" : ""))
+            Text(grade.displayName + (suggested ? " ✓" : ""))
                 .font(.system(size: 13, weight: suggested ? .medium : .regular))
                 .foregroundStyle(Theme.gradeColor(grade.kind))
                 .frame(maxWidth: .infinity).padding(.vertical, 7)
@@ -137,13 +137,6 @@ struct ProductionCardView: View {
                     .strokeBorder(suggested ? Theme.sugBorder : Theme.borderSecondary, lineWidth: suggested ? 1.5 : Theme.hairline))
         }
         .buttonStyle(.plain)
-    }
-
-    private func label(_ grade: ReviewGrade) -> String {
-        switch grade {
-        case .again: return "Again"; case .hard: return "Hard"
-        case .good: return "Good"; case .easy: return "Easy"
-        }
     }
 
     // MARK: Diff rendering

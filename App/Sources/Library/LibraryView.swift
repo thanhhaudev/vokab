@@ -11,6 +11,7 @@ struct LibraryView: View {
     @State private var search = ""
     @State private var pendingDelete: Entry?
     @State private var showAllCategories = false
+    @State private var showDashboard = true
     // Persisted across launches; the live @State values drive layout during a
     // drag so we don't write UserDefaults every frame (that caused jank).
     @AppStorage("library.sidebarWidth") private var storedSidebarWidth: Double = 172
@@ -45,9 +46,14 @@ struct LibraryView: View {
             HStack(spacing: 0) {
                 sidebar.frame(width: sw)
                 ResizableDivider(width: $sidebarWidth, range: 150...300) { storedSidebarWidth = $0 }
-                main.frame(width: mw)
-                ResizableDivider(width: $mainWidth, range: 240...640) { storedMainWidth = $0 }
-                detailPane.frame(maxWidth: .infinity)
+                if showDashboard {
+                    DashboardView(env: env, model: model)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    main.frame(width: mw)
+                    ResizableDivider(width: $mainWidth, range: 240...640) { storedMainWidth = $0 }
+                    detailPane.frame(maxWidth: .infinity)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
@@ -59,11 +65,13 @@ struct LibraryView: View {
             // A freshly opened Library may have been asked to focus a specific entry.
             if let id = WindowManager.shared.consumePendingSelection() {
                 selected = (try? env.entries.entry(id: id)) ?? nil
+                showDashboard = false
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: WindowManager.selectEntry)) { note in
             guard let id = note.object as? Int64 else { return }
             selected = (try? env.entries.entry(id: id)) ?? nil
+            showDashboard = false
         }
         .onReceive(NotificationCenter.default.publisher(for: WindowManager.dataDidChange)) { _ in
             model.load()
@@ -135,6 +143,7 @@ struct LibraryView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
+                    dashboardNavItem()
                     navItem(L.t("Due today", "Đến hạn hôm nay"), system: "rectangle.stack", count: model.dueCount, filter: .due)
                     navItem(L.t("All words", "Tất cả"), system: "books.vertical", count: model.total, filter: .all)
                     navItem(L.t("This week", "Tuần này"), system: "clock", count: model.weekCount, filter: .week)
@@ -227,7 +236,7 @@ struct LibraryView: View {
 
     private func levelChip(_ level: String, count: Int) -> some View {
         let on = model.filter == .cefr(level)
-        return Button { model.filter = on ? .all : .cefr(level) } label: {
+        return Button { select(on ? .all : .cefr(level)) } label: {
             HStack(spacing: 4) {
                 Text(level.uppercased()).font(.system(size: 11, weight: .medium))
                 Text("\(count)").font(.system(size: 10)).foregroundStyle(on ? Theme.accent : Theme.textTertiary)
@@ -388,9 +397,33 @@ struct LibraryView: View {
         SecLabel(text).padding(.leading, 10).padding(.top, 14).padding(.bottom, 6)
     }
 
+    /// Switching to a filter always leaves the dashboard view.
+    private func select(_ f: LibraryFilter) {
+        model.filter = f
+        showDashboard = false
+    }
+
+    /// Dashboard sidebar row — first item, mirrors navItem's selected styling but
+    /// has no count and is driven by `showDashboard` instead of a filter match.
+    private func dashboardNavItem() -> some View {
+        let on = showDashboard
+        return Button { showDashboard = true } label: {
+            HStack(spacing: 9) {
+                Image(systemName: "square.grid.2x2").font(.system(size: 13)).frame(width: 16)
+                Text(L.t("Dashboard", "Dashboard")).font(.system(size: 13, weight: on ? .medium : .regular))
+                Spacer()
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .foregroundStyle(on ? Theme.accentText : Theme.textSecondary)
+            .background(on ? Theme.accentBg : .clear, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     private func navItem(_ title: String, system: String, count: Int, filter: LibraryFilter) -> some View {
         let on = model.filter == filter
-        return Button { model.filter = filter } label: {
+        return Button { select(filter) } label: {
             HStack(spacing: 9) {
                 Image(systemName: system).font(.system(size: 13)).frame(width: 16)
                 Text(title).font(.system(size: 13, weight: on ? .medium : .regular))
@@ -413,7 +446,7 @@ struct LibraryView: View {
                               colorIndex: Int? = -1) -> some View {
         let on = model.filter == filter
         let idx = (colorIndex == -1) ? model.categoryColorIndex[title] : colorIndex
-        return Button { model.filter = filter } label: {
+        return Button { select(filter) } label: {
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(idx.map { Theme.categoryColor($0) } ?? Theme.textTertiary)

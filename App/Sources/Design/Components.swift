@@ -143,32 +143,6 @@ struct WinCard<Content: View>: View {
     }
 }
 
-// MARK: - Metric card
-
-struct MetricCard: View {
-    let value: String
-    let label: String
-    /// Optional state-dot color shown before the label (mockup state-dot style).
-    var accent: Color? = nil
-    var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(value).font(.system(size: 20, weight: .medium)).foregroundStyle(Theme.textPrimary)
-            HStack(alignment: .top, spacing: 5) {
-                if let accent {
-                    Circle().fill(accent).frame(width: 7, height: 7).padding(.top, 4)
-                }
-                // Reserve 2 lines so every card is the same height regardless of how
-                // the label wraps when the window narrows.
-                Text(label).font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
-                    .lineLimit(2, reservesSpace: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(.horizontal, 12).padding(.vertical, 9)
-        .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: Theme.radiusLg))
-    }
-}
-
 // MARK: - Buttons
 
 struct VPrimaryButtonStyle: ButtonStyle {

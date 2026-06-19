@@ -12,6 +12,8 @@ struct LibraryView: View {
     @State private var pendingDelete: Entry?
     @State private var showAllCategories = false
     @State private var showDashboard = true
+    @State private var sortOrder: SortOrder = .recent
+    @FocusState private var filterFocused: Bool
     // Persisted across launches; the live @State values drive layout during a
     // drag so we don't write UserDefaults every frame (that caused jank).
     @AppStorage("library.sidebarWidth") private var storedSidebarWidth: Double = 172
@@ -24,9 +26,16 @@ struct LibraryView: View {
     /// Categories shown before the "+N more" cap (mockup #4 shows the top 5).
     private static let categoryCap = 5
 
-    /// Due-today card dot: red when anything is overdue, else amber (state-dot palette).
-    private var dueAccent: Color {
-        model.overdueCount > 0 ? Color(hex: 0xD85A30) : Color(hex: 0xEF9F27)
+    /// Word-list sort order (header control). Default: most recently added first.
+    enum SortOrder: Hashable {
+        case recent, az, due
+        var label: String {
+            switch self {
+            case .recent: return L.t("Recent", "Mới thêm")
+            case .az:     return "A–Z"
+            case .due:    return L.t("Due", "Đến hạn")
+            }
+        }
     }
 
     init(env: AppEnvironment) {
@@ -469,31 +478,23 @@ struct LibraryView: View {
     private var main: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                MetricCard(value: "\(model.dueCount)", label: L.t("Due today", "Đến hạn"), accent: dueAccent)
-                MetricCard(value: "\(model.total)", label: L.t("Total", "Tổng"), accent: Theme.textTertiary)
-                MetricCard(value: "\(model.reviewedCount)", label: L.t("Reviewed", "Đã ôn"), accent: Theme.accent)
-                MetricCard(value: "\(model.weekCount)", label: L.t("This week", "Tuần này"), accent: Color(hex: 0x1D9E75))
+                filterField
+                sortMenu
             }
-            .padding(.horizontal, 16).padding(.vertical, 12)
-
-            CaptureFormView()
-                .padding(.horizontal, 16).padding(.bottom, 4)
+            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 6)
 
             HStack {
                 SecLabel("\(model.filterTitle) · \(visibleRows.count)")
                 Spacer()
-                if model.dueCount > 0 {
-                    Button(L.t("Start review →", "Bắt đầu ôn →")) { WindowManager.shared.showReview() }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 12)).foregroundStyle(Theme.accent)
-                }
             }
-            .padding(.horizontal, 16).padding(.bottom, 8).padding(.top, 4)
+            .padding(.horizontal, 16).padding(.bottom, 8).padding(.top, 2)
 
             list
+
+            reviewBar
         }
         .background(Theme.bgPrimary)
-        .searchable(text: $search, placement: .toolbar, prompt: L.t("Search words…", "Tìm từ…"))
+        .background(focusShortcut)
         .toolbar {
             ToolbarItem {
                 Menu {
@@ -509,11 +510,113 @@ struct LibraryView: View {
         }
     }
 
+    /// Inline filter field (replaces the toolbar search): live-filters the list.
+    private var filterField: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(Theme.textTertiary)
+            TextField(L.t("Filter words…", "Lọc từ…"), text: $search)
+                .textFieldStyle(.plain).font(.system(size: 13)).focused($filterFocused)
+            if !search.isEmpty {
+                Button { search = "" } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 12)).foregroundStyle(Theme.textTertiary)
+                }
+                .buttonStyle(.plain).help(L.t("Clear filter", "Xoá lọc"))
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd)
+            .strokeBorder(filterFocused ? Theme.accent : Theme.borderTertiary,
+                          lineWidth: filterFocused ? 1 : Theme.hairline))
+    }
+
+    /// Sort control: Recent (added) · A–Z · Due. Default Recent.
+    private var sortMenu: some View {
+        Menu {
+            sortButton(.recent)
+            sortButton(.az)
+            sortButton(.due)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.up.arrow.down").font(.system(size: 11))
+                Text(sortOrder.label).font(.system(size: 12))
+                Image(systemName: "chevron.down").font(.system(size: 9))
+            }
+            .foregroundStyle(Theme.textSecondary)
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
+            .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd)
+                .strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+    }
+
+    @ViewBuilder
+    private func sortButton(_ order: SortOrder) -> some View {
+        Button { sortOrder = order } label: {
+            if sortOrder == order {
+                Label(order.label, systemImage: "checkmark")
+            } else {
+                Text(order.label)
+            }
+        }
+    }
+
+    /// Sticky bottom bar with the day's review action. Always present so it
+    /// matches the menubar popover: "Review now" when cards are due, "Study ahead"
+    /// otherwise (review before the schedule).
+    private var reviewBar: some View {
+        HStack(spacing: 8) {
+            Text(model.dueCount > 0
+                 ? L.t("\(model.dueCount) due today", "\(model.dueCount) đến hạn hôm nay")
+                 : L.t("Nothing due", "Không có thẻ đến hạn"))
+                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+            Spacer()
+            Button { WindowManager.shared.showReview() } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "play.fill").font(.system(size: 10))
+                    Text(model.dueCount > 0 ? L.t("Review now", "Ôn tập ngay")
+                                            : L.t("Study ahead", "Ôn sớm"))
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundStyle(Theme.accentBg)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(Theme.accent, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(Theme.bgSecondary)
+        .overlay(alignment: .top) { Hairline() }
+    }
+
+    /// ⌘F focuses the inline filter (the toolbar search it replaced gave this for free).
+    private var focusShortcut: some View {
+        Button("") { filterFocused = true }
+            .keyboardShortcut("f", modifiers: .command)
+            .opacity(0).frame(width: 0, height: 0)
+    }
+
+    /// Rows for the current filter, narrowed by the inline filter text and ordered
+    /// by the selected sort.
     private var visibleRows: [LibraryRow] {
-        let rows = model.rows
-        guard !search.isEmpty else { return rows }
-        let q = search.lowercased()
-        return rows.filter { $0.entry.rawText.lowercased().contains(q) }
+        var rows = model.rows
+        if !search.isEmpty {
+            let q = search.lowercased()
+            rows = rows.filter { $0.entry.rawText.lowercased().contains(q) }
+        }
+        switch sortOrder {
+        case .recent:
+            rows.sort { $0.entry.capturedAt > $1.entry.capturedAt }
+        case .az:
+            rows.sort { $0.entry.rawText.localizedCaseInsensitiveCompare($1.entry.rawText) == .orderedAscending }
+        case .due:
+            rows.sort {
+                (model.states[$0.entry.id ?? 0]?.dueDate ?? .distantFuture)
+                    < (model.states[$1.entry.id ?? 0]?.dueDate ?? .distantFuture)
+            }
+        }
+        return rows
     }
 
     private var list: some View {

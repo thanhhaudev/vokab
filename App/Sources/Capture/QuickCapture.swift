@@ -10,14 +10,14 @@ final class QuickCapture {
     static let shared = QuickCapture()
     private var panel: NSPanel?
 
-    func show(prefill: String? = nil) {
+    func show(prefill: String? = nil, source: String? = nil) {
         // Seed the field with the auto-grabbed selection, else the clipboard, so
         // the flow is "select → hotkey → Enter" (a Services-menu replacement).
         // Recreated each open because a cached panel's SwiftUI @State wouldn't refresh.
         let seed = prefill ?? (NSPasteboard.general.string(forType: .string)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
         panel?.orderOut(nil)
-        let panel = makePanel(initialText: seed)
+        let panel = makePanel(initialText: seed, source: source)
         self.panel = panel
         reposition(panel)
         // A non-activating panel can take key focus without activating the whole
@@ -28,8 +28,10 @@ final class QuickCapture {
 
     func hide() { panel?.orderOut(nil) }
 
-    private func makePanel(initialText: String) -> NSPanel {
-        let src = SourceContext(appName: "Manual entry")
+    private func makePanel(initialText: String, source: String?) -> NSPanel {
+        // The app the user captured from (passed from the hotkey path), else a
+        // manual entry typed straight into the panel.
+        let src = SourceContext(appName: source ?? "Manual entry")
         // The header pill should show the user's ACTUAL global hotkey (or nothing
         // when it's not enabled) — not a hardcoded string.
         let hotkeyLabel: String? = {

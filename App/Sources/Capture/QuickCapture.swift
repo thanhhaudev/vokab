@@ -220,17 +220,21 @@ private struct QuickCaptureView: View {
                 Text("· Esc").font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
                 Spacer()
                 Button(action: submit) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 5) {
                         Text(isBatch ? L.t("Review \(lines.count) items", "Xem \(lines.count) mục") :
                              isParagraph ? L.t("Capture & extract", "Lưu & trích") : L.t("Capture", "Lưu"))
-                        Image(systemName: "return")
+                            .font(.system(size: 12, weight: .medium))
+                        // Show the real shortcut (⌘↵) — plain ↵ inserts a newline.
+                        Text("⌘↵").font(Theme.mono(11)).opacity(0.85)
                     }
-                    .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.accentBg)
+                    .foregroundStyle(Theme.accentBg)
                     .padding(.horizontal, 11).padding(.vertical, 5)
                     .background(Theme.accent, in: RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.return, modifiers: .command)
+                .help(L.t("Capture (⌘↵). Enter adds a new line.",
+                          "Lưu (⌘↵). Enter để xuống dòng."))
             }
         }
         .padding(16)

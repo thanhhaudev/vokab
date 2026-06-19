@@ -409,8 +409,8 @@ struct LibraryView: View {
         let on = showDashboard
         return Button { showDashboard = true } label: {
             HStack(spacing: 9) {
-                Image(systemName: "square.grid.2x2").font(.system(size: 13)).frame(width: 16)
-                Text(L.t("Dashboard", "Dashboard")).font(.system(size: 13, weight: on ? .medium : .regular))
+                Image(systemName: "house").font(.system(size: 13)).frame(width: 16)
+                Text(L.t("Home", "Trang chủ")).font(.system(size: 13, weight: on ? .medium : .regular))
                 Spacer()
             }
             .padding(.horizontal, 10).padding(.vertical, 6)

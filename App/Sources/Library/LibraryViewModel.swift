@@ -41,6 +41,10 @@ final class LibraryViewModel: ObservableObject {
     @Published private(set) var quotaUsed = 0
     @Published private(set) var quotaLimit = 0
     @Published private(set) var diskBytes: Int64 = 0
+    // Dashboard insight series (populated in load()).
+    @Published private(set) var reviewedToday = 0
+    @Published private(set) var activity: [Int] = []        // last 56 days, oldest → newest
+    @Published private(set) var forecast: [Int] = []        // next 14 days, offset 0..13
     // Antigravity real quota
     @Published var antigravityQuota: AntigravityQuotaSummary?
     @Published var quotaReloading = false
@@ -73,6 +77,30 @@ final class LibraryViewModel: ObservableObject {
         quotaLimit = env.settings.dailyLimit
         diskBytes = (try? VokabDatabase.defaultPath())
             .flatMap { try? FileManager.default.attributesOfItem(atPath: $0)[.size] as? Int64 } ?? 0
+
+        // Dashboard insight series.
+        reviewedToday = (try? env.reviewLog.count(on: now)) ?? 0
+        let cal = Calendar.current
+        let from = cal.date(byAdding: .day, value: -55, to: cal.startOfDay(for: now)) ?? now
+        let daily = (try? env.reviewLog.dailyCounts(from: from, to: now)) ?? [:]
+        activity = (0..<56).map { offset in
+            let day = cal.date(byAdding: .day, value: offset, to: cal.startOfDay(for: from)) ?? now
+            return daily[TextKey.dayString(day)] ?? 0
+        }
+        let f = (try? env.review.dueForecast(days: 14, asOf: now)) ?? [:]
+        forecast = (0..<14).map { f[$0] ?? 0 }
+    }
+
+    // MARK: Dashboard composition helpers
+
+    var cefrComposition: [(label: String, count: Int)] {
+        cefrLevels.map { ($0.uppercased(), count(forCEFR: $0)) }
+    }
+    var languageComposition: [(label: String, count: Int)] {
+        languages.map { ($0.uppercased(), count(forLanguage: $0)) }
+    }
+    var topCategories: [(label: String, count: Int)] {
+        categoryCounts.sorted { $0.value > $1.value }.prefix(6).map { ($0.key, $0.value) }
     }
 
     /// Human-readable disk size for the statcard (e.g. "4.2 MB").

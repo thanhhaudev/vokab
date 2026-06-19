@@ -141,6 +141,36 @@ final class CaptureController: ObservableObject {
         }
     }
 
+    /// Saves several list items at once (optimistic, one per line), then posts a
+    /// single summary notification. Used by BatchCaptureView after the user picks.
+    func captureBatch(_ items: [String], source: SourceContext) {
+        guard let env else { return }
+        var added = 0, dupes = 0
+        for raw in items {
+            let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !t.isEmpty else { continue }
+            let lang = LanguageDetector.detect(t, default: env.settings.defaultCaptureLanguage)
+            do {
+                switch try env.capture.beginCapture(text: t, language: lang, source: source) {
+                case let .pending(id, _):
+                    Task { await env.captureWorker.enqueueAnalysis(entryId: id) }
+                    added += 1
+                case .ready:
+                    added += 1
+                case .duplicate:
+                    dupes += 1
+                case .paragraph, .blocked:
+                    break
+                }
+            } catch { }
+        }
+        WindowManager.notifyDataChanged()
+        let body = dupes > 0
+            ? L.t("Added \(added) · \(dupes) already in vokab", "Đã thêm \(added) · \(dupes) đã có")
+            : L.t("Added \(added) words", "Đã thêm \(added) từ")
+        NotificationManager.shared.postResolved(summary: body, entryId: nil, wasDuplicate: false)
+    }
+
     func openLibrary() { WindowManager.shared.showLibrary() }
     func openEntry(_ id: Int64) { WindowManager.shared.showLibrary(select: id) }
     func reopenExtraction() {

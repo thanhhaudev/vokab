@@ -29,9 +29,13 @@ final class QuickCapture {
     func hide() { panel?.orderOut(nil) }
 
     private func makePanel(initialText: String) -> NSPanel {
+        let src = SourceContext(appName: "Manual entry")
         let view = QuickCaptureView(initialText: initialText, onSubmit: { [weak self] text, language, type, minLevel in
-            CaptureController.shared.capture(text, source: SourceContext(appName: "Manual entry"),
+            CaptureController.shared.capture(text, source: src,
                                              language: language, type: type, minLevel: minLevel)
+            self?.hide()
+        }, onBatch: { [weak self] lines in
+            WindowManager.shared.showBatch(lines: lines, source: src)
             self?.hide()
         }, onCancel: { [weak self] in self?.hide() })
 
@@ -59,6 +63,7 @@ final class QuickCapture {
 
 private struct QuickCaptureView: View {
     let onSubmit: (String, String?, CardType?, CEFR?) -> Void
+    let onBatch: ([String]) -> Void
     let onCancel: () -> Void
     @State private var text: String
     @State private var typeChoice: TypeChoice = .auto
@@ -68,8 +73,9 @@ private struct QuickCaptureView: View {
     @State private var forceSubmit = false
 
     init(initialText: String = "", onSubmit: @escaping (String, String?, CardType?, CEFR?) -> Void,
-         onCancel: @escaping () -> Void) {
+         onBatch: @escaping ([String]) -> Void, onCancel: @escaping () -> Void) {
         self.onSubmit = onSubmit
+        self.onBatch = onBatch
         self.onCancel = onCancel
         _text = State(initialValue: initialText)
     }
@@ -83,6 +89,12 @@ private struct QuickCaptureView: View {
         return n > 1 ? n : nil
     }
     private var isParagraph: Bool { effectiveType == .paragraphItem }
+    private var lines: [String] {
+        trimmed.split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+    private var isBatch: Bool { lines.count >= 2 && !isParagraph }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -159,13 +171,15 @@ private struct QuickCaptureView: View {
                 Text("⌘↵").font(Theme.mono(11)).foregroundStyle(Theme.textTertiary)
                     .padding(.horizontal, 5).padding(.vertical, 1)
                     .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: 4))
-                Text(isParagraph ? L.t("to extract", "để trích xuất") : L.t("to capture", "để lưu"))
+                Text(isBatch ? L.t("to review", "để xem") :
+                     isParagraph ? L.t("to extract", "để trích xuất") : L.t("to capture", "để lưu"))
                     .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 Text("· Esc").font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
                 Spacer()
                 Button(action: submit) {
                     HStack(spacing: 4) {
-                        Text(isParagraph ? L.t("Capture & extract", "Lưu & trích") : L.t("Capture", "Lưu"))
+                        Text(isBatch ? L.t("Review \(lines.count) items", "Xem \(lines.count) mục") :
+                             isParagraph ? L.t("Capture & extract", "Lưu & trích") : L.t("Capture", "Lưu"))
                         Image(systemName: "return")
                     }
                     .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.accentBg)
@@ -233,6 +247,13 @@ private struct QuickCaptureView: View {
         if !forceSubmit {
             let issues = SpellCheck.issues(in: captured, language: detectedLang)
             if !issues.isEmpty { spellIssues = issues; return }   // show confirm, don't submit yet
+        }
+        // Batch path: multi-line non-paragraph → open dedupe checklist
+        if isBatch {
+            let items = lines
+            text = ""; typeChoice = .auto; minLevel = .b2; spellIssues = []; forceSubmit = false
+            onBatch(items)
+            return
         }
         // proceed (existing behavior)
         let type = typeChoice.forcedType

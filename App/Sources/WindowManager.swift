@@ -27,6 +27,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     private var library: NSWindow?
     private var review: NSWindow?
     private var extraction: NSWindow?
+    private var batch: NSWindow?
     private var captureResult: NSWindow?
     /// Entry to select when a newly created Library window first appears.
     private(set) var pendingSelectionId: Int64?
@@ -107,6 +108,16 @@ final class WindowManager: NSObject, NSWindowDelegate {
         present(extraction)
     }
 
+    func showBatch(lines: [String], source: SourceContext) {
+        guard let env else { return }
+        let root = BatchCaptureView(lines: lines, source: source,
+                                    onClose: { [weak self] in self?.batch?.close() })
+            .environmentObject(env)
+        batch = makeWindow(title: "Add to deck", width: 560, height: 500,
+                           minWidth: 480, minHeight: 360, root: root)
+        present(batch)
+    }
+
     private func makeWindow<V: View>(title: String, width: CGFloat, height: CGFloat,
                                      minWidth: CGFloat, minHeight: CGFloat, root: V) -> NSWindow {
         let window = NSWindow(
@@ -142,7 +153,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
         // vokab windows remain visible.
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            let stillVisible = [self.library, self.review, self.captureResult, self.extraction]
+            let stillVisible = [self.library, self.review, self.captureResult, self.extraction, self.batch]
                 .compactMap { $0 }
                 .contains { $0.isVisible }
             if !stillVisible {

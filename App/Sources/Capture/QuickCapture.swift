@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 import VokabKit
 
 /// A small floating capture field shown by the global hotkey. Enter captures
@@ -63,6 +64,8 @@ private struct QuickCaptureView: View {
     @State private var typeChoice: TypeChoice = .auto
     @State private var minLevel: CEFR = .b2
     @FocusState private var focused: Bool
+    @State private var spellIssues: [SpellCheck.Issue] = []
+    @State private var forceSubmit = false
 
     init(initialText: String = "", onSubmit: @escaping (String, String?, CardType?, CEFR?) -> Void,
          onCancel: @escaping () -> Void) {
@@ -95,10 +98,23 @@ private struct QuickCaptureView: View {
                     .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
             }
 
-            TextField(L.t("Type or paste…", "Gõ hoặc dán…"), text: $text, axis: .vertical)
-                .textFieldStyle(.plain).font(.system(size: 16)).focused($focused)
-                .lineLimit(1...3)
-                .onSubmit(submit)
+            // MARK: Multi-line TextEditor with placeholder overlay + drag-drop
+            ZStack(alignment: .topLeading) {
+                if text.isEmpty {
+                    Text(L.t("Type or paste… (drag text or .txt here)",
+                             "Gõ hoặc dán… (kéo thả text/file .txt vào)"))
+                        .font(.system(size: 16)).foregroundStyle(Theme.textTertiary)
+                        .padding(.top, 1).padding(.leading, 5).allowsHitTesting(false)
+                }
+                TextEditor(text: $text)
+                    .font(.system(size: 16)).focused($focused)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 44, maxHeight: 140)
+            }
+            .onChange(of: text) { _, _ in spellIssues = []; forceSubmit = false }
+            .onDrop(of: [.fileURL, .text, .plainText, .utf8PlainText], isTargeted: nil) { providers in
+                handleDrop(providers)
+            }
 
             // Single row — the panel is wide enough to fit Paragraph mode's
             // Min-level menu + segmented; fixedSize labels never wrap.
@@ -108,9 +124,39 @@ private struct QuickCaptureView: View {
                 trailingControls
             }
 
+            // MARK: Spell-check confirm gate (shown only when issues detected)
+            if !spellIssues.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "text.magnifyingglass").font(.system(size: 11)).foregroundStyle(.orange)
+                        Text(L.t("Possible spelling issues:", "Có thể sai chính tả:"))
+                            .font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+                    }
+                    ForEach(spellIssues) { issue in
+                        HStack(spacing: 5) {
+                            Text(issue.word).font(.system(size: 11, weight: .medium)).foregroundStyle(.orange)
+                            if let s = issue.suggestion {
+                                Image(systemName: "arrow.right").font(.system(size: 8)).foregroundStyle(Theme.textTertiary)
+                                Text(s).font(.system(size: 11)).foregroundStyle(Theme.textPrimary)
+                            }
+                        }
+                    }
+                    HStack(spacing: 8) {
+                        Button(L.t("Fix all", "Sửa hết")) {
+                            text = SpellCheck.fixAll(text, issues: spellIssues); spellIssues = []
+                        }.buttonStyle(.plain).font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.accent)
+                        Button(L.t("Capture anyway", "Lưu nguyên")) {
+                            forceSubmit = true; submit()
+                        }.buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+                    }
+                }
+                .padding(8)
+                .background(Theme.bgTertiary, in: RoundedRectangle(cornerRadius: 6))
+            }
+
             HStack(spacing: 6) {
                 Text(L.t("Press", "Nhấn")).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                Text("↵").font(Theme.mono(11)).foregroundStyle(Theme.textTertiary)
+                Text("⌘↵").font(Theme.mono(11)).foregroundStyle(Theme.textTertiary)
                     .padding(.horizontal, 5).padding(.vertical, 1)
                     .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: 4))
                 Text(isParagraph ? L.t("to extract", "để trích xuất") : L.t("to capture", "để lưu"))
@@ -127,6 +173,7 @@ private struct QuickCaptureView: View {
                     .background(Theme.accent, in: RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut(.return, modifiers: .command)
             }
         }
         .padding(16)
@@ -178,12 +225,48 @@ private struct QuickCaptureView: View {
         }
     }
 
+    // MARK: Submit
+
     private func submit() {
         let captured = trimmed                 // snapshot BEFORE clearing text
         guard !captured.isEmpty else { return }
+        if !forceSubmit {
+            let issues = SpellCheck.issues(in: captured, language: detectedLang)
+            if !issues.isEmpty { spellIssues = issues; return }   // show confirm, don't submit yet
+        }
+        // proceed (existing behavior)
         let type = typeChoice.forcedType
         let lvl: CEFR? = isParagraph ? minLevel : nil
-        text = ""; typeChoice = .auto; minLevel = .b2
+        text = ""; typeChoice = .auto; minLevel = .b2; spellIssues = []; forceSubmit = false
         onSubmit(captured, nil, type, lvl)     // #9 language is auto-only (mockup)
+    }
+
+    // MARK: Drag-drop
+
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        var handled = false
+        for p in providers {
+            if p.canLoadObject(ofClass: URL.self) {
+                handled = true
+                _ = p.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url, url.isFileURL,
+                          let s = try? String(contentsOf: url, encoding: .utf8) else { return }
+                    DispatchQueue.main.async { appendDropped(s) }
+                }
+            } else if p.canLoadObject(ofClass: NSString.self) {
+                handled = true
+                _ = p.loadObject(ofClass: NSString.self) { obj, _ in
+                    guard let s = obj as? String else { return }
+                    DispatchQueue.main.async { appendDropped(s) }
+                }
+            }
+        }
+        return handled
+    }
+
+    private func appendDropped(_ s: String) {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        text = text.isEmpty ? t : text + "\n" + t
     }
 }

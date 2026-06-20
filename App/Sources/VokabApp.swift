@@ -18,8 +18,10 @@ struct VokabApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("vokab", systemImage: "character.book.closed.fill") {
+        MenuBarExtra {
             MenubarPopoverView().environmentObject(env)
+        } label: {
+            Image(nsImage: MenubarIcon.idle())
         }
         .menuBarExtraStyle(.window)
 

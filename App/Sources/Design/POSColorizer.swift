@@ -9,14 +9,44 @@ enum POSColorizer {
     static func taggedWords(_ phrase: String) -> [(text: String, pos: String?)] {
         let tagger = NLTagger(tagSchemes: [.lexicalClass])
         tagger.string = phrase
-        var result: [(String, String?)] = []
+        var raw: [(String, String?)] = []
         let range = phrase.startIndex..<phrase.endIndex
         tagger.enumerateTags(in: range, unit: .word, scheme: .lexicalClass,
                              options: [.omitWhitespace, .omitPunctuation]) { tag, tokenRange in
-            result.append((String(phrase[tokenRange]), tag?.rawValue))
+            raw.append((String(phrase[tokenRange]), tag?.rawValue))
             return true
         }
-        return result
+        // NLTagger splits contractions ("I'm" -> "I" + "'m", "don't" -> "do" + "n't").
+        // Re-join the trailing fragment into its head word so the phrase reads
+        // naturally and we never render an orphan "'m" / "n't" chip.
+        var merged: [(String, String?)] = []
+        for token in raw {
+            if !merged.isEmpty, isContractionSuffix(token.0) {
+                merged[merged.count - 1].0 += token.0
+            } else {
+                merged.append(token)
+            }
+        }
+        // Display casing: sentence-initial capital + always-I.
+        if !merged.isEmpty { merged[0].0 = EnglishDisplay.capitalizingFirst(merged[0].0) }
+        return merged.map { (EnglishDisplay.fixI($0.0), $0.1) }
+    }
+
+    /// A fragment NLTagger split off the head word of a contraction.
+    private static func isContractionSuffix(_ token: String) -> Bool {
+        token.hasPrefix("'") || token.lowercased() == "n't"
+    }
+
+    /// Human-readable name for a colored part of speech, for hover tooltips so a
+    /// user can learn what a pill means without external docs. nil for classes
+    /// we don't color (rendered as plain text anyway).
+    static func posLabel(_ pos: String?) -> String? {
+        guard let pos = pos?.lowercased() else { return nil }
+        if pos.hasPrefix("verb") { return L.t("verb", "động từ") }
+        if pos.hasPrefix("noun") { return L.t("noun", "danh từ") }
+        if pos.hasPrefix("prep") { return L.t("preposition", "giới từ") }
+        if pos.hasPrefix("adv")  { return L.t("adverb", "trạng từ") }
+        return nil
     }
 
     /// Role keywords in agy formula strings → a part-of-speech bucket for coloring.

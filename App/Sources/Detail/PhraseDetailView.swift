@@ -7,6 +7,7 @@ struct PhraseDetailView: View {
     @State private var current: Entry
     @State private var enriching = false
     @State private var tab: Tab = .variations
+    @State private var showLegend = false
     private let context: DetailContext
 
     init(entry: Entry, context: DetailContext = .library) {
@@ -119,11 +120,12 @@ struct PhraseDetailView: View {
         .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
     }
 
-    /// Label + colored tokens + audio + meta — the phrase's identity line.
+    /// Colored tokens + audio + meta — the phrase's identity line. No "Phrase"
+    /// prefix: it doubled the "· phrasal verb" type meta and the single-word
+    /// header carries no type prefix either (deliberate deviation from mockup,
+    /// see SPEC §12).
     private var phraseIdentity: some View {
         FlowLayout(spacing: 6) {
-            Text("Phrase").font(.system(size: 13)).foregroundStyle(Theme.textTertiary)
-                .padding(.trailing, 2)
             ForEach(Array(taggedTokens.enumerated()), id: \.offset) { _, token in
                 if let colors = Theme.tokenColors(token.pos) {
                     Text(token.text)
@@ -131,6 +133,7 @@ struct PhraseDetailView: View {
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(colors.bg, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
                         .foregroundStyle(colors.fg)
+                        .help(POSColorizer.posLabel(token.pos) ?? "")
                 } else {
                     Text(token.text)
                         .font(.system(size: 14)).foregroundStyle(Theme.textTertiary)
@@ -145,6 +148,14 @@ struct PhraseDetailView: View {
                     .font(.system(size: 13)).foregroundStyle(Theme.textTertiary)
                     .fixedSize()   // wrap as a whole unit, never break "· EN ·" / "idiom"
             }
+            // Color legend ⓘ trails the meta — sits with the row's info, opens
+            // the pill color key on demand.
+            Button { showLegend.toggle() } label: {
+                Image(systemName: "info.circle").font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
+            }
+            .buttonStyle(.plain)
+            .help(L.t("What the colors mean", "Màu các pill nghĩa là gì"))
+            .popover(isPresented: $showLegend, arrowEdge: .bottom) { legendPopover }
         }
     }
 
@@ -162,6 +173,27 @@ struct PhraseDetailView: View {
     /// Words of the phrase tagged with part of speech (on-device).
     private var taggedTokens: [(text: String, pos: String?)] {
         POSColorizer.taggedWords(entry.rawText)
+    }
+
+    /// Self-demonstrating color key: each row is an actual pill in its color,
+    /// so the user learns the whole system at a glance (SPEC §12 tokens).
+    private var legendPopover: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L.t("Pills are colored by word type", "Pill được tô màu theo từ loại"))
+                .font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textTertiary)
+            ForEach(["verb", "noun", "prep", "adv"], id: \.self) { pos in
+                if let colors = Theme.tokenColors(pos), let name = POSColorizer.posLabel(pos) {
+                    Text(name)
+                        .font(.system(size: 13, weight: .medium))
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(colors.bg, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
+                        .foregroundStyle(colors.fg)
+                }
+            }
+            Text(L.t("Other words stay plain.", "Từ loại khác để trơn."))
+                .font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
+        }
+        .padding(14)
     }
 
     // MARK: Formula box
@@ -224,7 +256,7 @@ struct PhraseDetailView: View {
                 }
                 if let example = card?.examples.first {
                     HStack(alignment: .top, spacing: 8) {
-                        Text(example).font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+                        Text(EnglishDisplay.sentence(example)).font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
                             .padding(.leading, 10).padding(.top, 4)
                             .overlay(alignment: .leading) { Rectangle().fill(Theme.borderSecondary).frame(width: 2) }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -352,20 +384,49 @@ struct PhraseDetailView: View {
         } else {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(item.sentence.replacingOccurrences(of: ClozeBuilder.blank, with: item.answer))
-                            .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
-                        if let note = item.noteVi, !note.isEmpty {
-                            Text(note).font(.system(size: 12)).foregroundStyle(Theme.textTertiary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12).padding(.vertical, 10)
-                    .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
+                    errorCard(item)
                 }
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
         }
+    }
+
+    /// One common-error item: the sentence with the correct answer marked ✓
+    /// green and the wrong options marked ✗ red, so the mistake is visible
+    /// (not silently corrected). Falls back to plain text if there's no blank.
+    private func errorCard(_ item: ErrorQuiz) -> some View {
+        let parts = item.sentence.components(separatedBy: ClozeBuilder.blank)
+        let head = parts.first ?? item.sentence
+        let tail = parts.count > 1 ? parts.dropFirst().joined(separator: ClozeBuilder.blank) : ""
+        let hasBlank = parts.count > 1
+        let answer = head.trimmingCharacters(in: .whitespaces).isEmpty
+            ? EnglishDisplay.capitalizingFirst(item.answer) : item.answer
+        let wrong = item.options.filter { $0.caseInsensitiveCompare(item.answer) != .orderedSame }
+        return VStack(alignment: .leading, spacing: 5) {
+            if hasBlank {
+                (Text(EnglishDisplay.sentence(head))
+                 + Text("✓\(answer)").foregroundColor(Theme.diffIns).bold()
+                 + Text(EnglishDisplay.fixI(tail)))
+                    .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+                if !wrong.isEmpty {
+                    HStack(spacing: 12) {
+                        ForEach(wrong, id: \.self) { opt in
+                            Text("✗ \(opt)").font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Theme.textDanger)
+                        }
+                    }
+                }
+            } else {
+                Text(EnglishDisplay.sentence(item.sentence))
+                    .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+            }
+            if let note = item.noteVi, !note.isEmpty {
+                Text(note).font(.system(size: 12)).foregroundStyle(Theme.textTertiary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
     }
 
     private func varGrid(_ items: [String], danger: Bool) -> some View {

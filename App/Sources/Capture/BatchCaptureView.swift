@@ -97,7 +97,7 @@ struct BatchCaptureView: View {
             Spacer()
             Button(L.t("Select all", "Chọn tất cả")) { selected = Set(lines.indices) }
                 .buttonStyle(.vSecondary)
-            Button(L.t("Add \(selected.count) to deck", "Thêm \(selected.count)")) { addSelected() }
+            Button(L.t("Save \(selected.count) to library", "Lưu \(selected.count) vào thư viện")) { addSelected() }
                 .buttonStyle(.vPrimary).disabled(selected.isEmpty)
         }
         .padding(14).background(Theme.bgSecondary)

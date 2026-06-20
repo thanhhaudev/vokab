@@ -113,7 +113,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
         let root = BatchCaptureView(lines: lines, source: source,
                                     onClose: { [weak self] in self?.batch?.close() })
             .environmentObject(env)
-        batch = makeWindow(title: "Add to deck", width: 560, height: 500,
+        batch = makeWindow(title: "Save to library", width: 560, height: 500,
                            minWidth: 480, minHeight: 360, root: root)
         present(batch)
     }

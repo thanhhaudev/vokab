@@ -480,6 +480,7 @@ struct LibraryView: View {
             HStack(spacing: 10) {
                 filterField
                 sortMenu
+                exportMenu
             }
             .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 6)
 
@@ -501,19 +502,32 @@ struct LibraryView: View {
         }
         .background(Theme.bgPrimary)
         .background(focusShortcut)
-        .toolbar {
-            ToolbarItem {
-                Menu {
-                    ForEach(ExportFormat.allCases) { format in
-                        Button(L.t("Export as \(format.rawValue)", "Xuất \(format.rawValue)")) {
-                            Exporter.presentSavePanel(model.rows.map(\.entry), format: format,
-                                                      meaningLanguage: env.settings.meaningLanguage)
-                        }
-                    }
-                } label: { Label(L.t("Export", "Xuất"), systemImage: "square.and.arrow.up") }
-                .disabled(model.rows.isEmpty)
+    }
+
+    /// Export control — inline beside the sort menu rather than a window `.toolbar`.
+    /// A SwiftUI window toolbar grows the native titlebar taller, so it would only
+    /// appear on the list view (not the dashboard), making the traffic-light header
+    /// jump height between screens. Keeping it inline holds the titlebar at one
+    /// consistent height everywhere, and mirrors how search lives inline (mockup #4).
+    private var exportMenu: some View {
+        Menu {
+            ForEach(ExportFormat.allCases) { format in
+                Button(L.t("Export as \(format.rawValue)", "Xuất \(format.rawValue)")) {
+                    Exporter.presentSavePanel(model.rows.map(\.entry), format: format,
+                                              meaningLanguage: env.settings.meaningLanguage)
+                }
             }
+        } label: {
+            Image(systemName: "square.and.arrow.up").font(.system(size: 12))
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.horizontal, 9).padding(.vertical, 7)
+                .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
+                .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd)
+                    .strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
         }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .disabled(model.rows.isEmpty)
+        .help(L.t("Export", "Xuất"))
     }
 
     /// Inline filter field (replaces the toolbar search): live-filters the list.

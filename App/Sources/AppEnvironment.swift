@@ -13,6 +13,7 @@ final class AppEnvironment: ObservableObject {
     /// production thresholds, meaning language. (Settings captured by services at
     /// init — agy model/path/timeout — still take effect on next launch.)
     @Published var settings: VokabSettings
+    @Published var activeAnalyses: Int = 0
     let dbQueue: DatabaseQueue
     let entries: EntryRepository
     let review: ReviewRepository
@@ -30,7 +31,7 @@ final class AppEnvironment: ObservableObject {
     let phraseErrorBackfiller: PhraseErrorBackfiller
     let translation: TranslationService
     let antigravityQuota: AntigravityQuotaService
-    let captureWorker: CaptureWorker
+    private(set) var captureWorker: CaptureWorker
     private var redQuotaGate = RedNotificationGate()
 
     init(queue: DatabaseQueue, settings: VokabSettings) {
@@ -63,17 +64,32 @@ final class AppEnvironment: ObservableObject {
         self.phraseErrorBackfiller = PhraseErrorBackfiller(agy: agy, entries: entries)
         self.translation = TranslationService(agy: agy, cache: cache)
         self.antigravityQuota = AntigravityQuotaService.live()
+        // The three non-activity callbacks are identical across both init phases;
+        // define them once. (Two-phase init is required: phase 1 assigns
+        // captureWorker so `self` is fully initialized, then phase 2 rebuilds it
+        // with an onActivity closure that can finally capture [weak self].)
+        let onWorkerChange: @Sendable () -> Void = {
+            Task { @MainActor in WindowManager.notifyDataChanged() }
+        }
+        let onWorkerFailure: @Sendable (Int64) -> Void = { entryId in
+            Task { @MainActor in
+                let word = ((try? entries.entry(id: entryId)) ?? nil)?.rawText ?? ""
+                NotificationManager.shared.postFailed(word: word, entryId: entryId)
+            }
+        }
+        let onWorkerComplete: @Sendable (Int64, CaptureService.AnalysisOutcome) -> Void = { id, outcome in
+            Task { @MainActor in CaptureController.shared.entryCompleted(id, outcome) }
+        }
+        // Phase 1: assign captureWorker so all stored properties are initialized.
         self.captureWorker = CaptureWorker(
             capture: self.capture, maxConcurrent: settings.maxConcurrent,
-            onChange: { Task { @MainActor in WindowManager.notifyDataChanged() } },
-            onFailure: { entryId in
-                Task { @MainActor in
-                    let word = ((try? entries.entry(id: entryId)) ?? nil)?.rawText ?? ""
-                    NotificationManager.shared.postFailed(word: word, entryId: entryId)
-                }
-            },
-            onComplete: { id, outcome in
-                Task { @MainActor in CaptureController.shared.entryCompleted(id, outcome) }
+            onChange: onWorkerChange, onFailure: onWorkerFailure, onComplete: onWorkerComplete)
+        // Phase 2: self is now fully initialized; rebuild with onActivity wired in.
+        self.captureWorker = CaptureWorker(
+            capture: self.capture, maxConcurrent: settings.maxConcurrent,
+            onChange: onWorkerChange, onFailure: onWorkerFailure, onComplete: onWorkerComplete,
+            onActivity: { [weak self] count in
+                Task { @MainActor in self?.activeAnalyses = count }
             })
     }
 

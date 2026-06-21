@@ -370,4 +370,32 @@ final class CaptureServiceTests: XCTestCase {
         XCTAssertEqual(result.failedChunks, 1)
         XCTAssertEqual(try h.quota.count(on: now), 1)              // failed chunk not charged
     }
+
+    // MARK: - Task 9: Dedupe guard in persistParagraphItem
+
+    func testPersistParagraphItemSkipsDuplicateAndBackfills() async throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let h = try makeHarness([.respond(#"{"meaning_vi":"nắm bắt","cefr_level":"B2"}"#)])
+        // First, capture "grasp" as a word with NO capture sentence.
+        _ = try await h.service.capture(text: "grasp", language: "en", source: source(now))
+        let before = try h.entries.all()
+        XCTAssertEqual(before.count, 1)
+        XCTAssertNil(before[0].captureSentence)
+
+        // Now persist a paragraph item for the same word, with source text → backfills sentence.
+        let item = try JSONCleaning.decode(ParagraphItem.self, from: #"{"word":"grasp","cefr":"B2"}"#)
+        let id = try h.service.persistParagraphItem(item, language: "en", source: source(now),
+                                                    sourceText: "I finally grasp the concept.")
+        XCTAssertEqual(id, before[0].id)                    // returns existing id
+        XCTAssertEqual(try h.entries.all().count, 1)        // no duplicate row
+        XCTAssertEqual(try h.entries.entry(id: id)?.captureSentence, "I finally grasp the concept.")
+    }
+
+    func testPersistParagraphItemInsertsWhenNew() throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let h = try makeHarness([])
+        let item = try JSONCleaning.decode(ParagraphItem.self, from: #"{"word":"novel","cefr":"B2"}"#)
+        let id = try h.service.persistParagraphItem(item, language: "en", source: source(now))
+        XCTAssertEqual(try h.entries.entry(id: id)?.rawText, "novel")
+    }
 }

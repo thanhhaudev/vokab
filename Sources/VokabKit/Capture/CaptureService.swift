@@ -149,6 +149,18 @@ public struct CaptureService: Sendable {
     @discardableResult
     public func persistParagraphItem(_ item: ParagraphItem, language: String,
                                      source: SourceContext, sourceText: String? = nil) throws -> Int64 {
+        let word = item.word ?? ""
+        let sentence = sourceText.flatMap {
+            SentenceExtractor.extractSentence(containing: word, from: $0)
+        }
+        // Dedupe guard (SPEC §11): if this word already exists, don't insert a
+        // duplicate — backfill any missing capture context and return its id.
+        if let existing = try entries.find(rawText: word, language: language), let id = existing.id {
+            try entries.backfillCaptureContextIfMissing(
+                id: id, captureSentence: sentence,
+                sourceApp: source.appName, sourceURL: source.url)
+            return id
+        }
         // Build a partial WordCard JSON (snake_case keys, decoded leniently later).
         var fields: [String: String] = [:]
         if let p = item.pos { fields["pos"] = p }
@@ -157,10 +169,7 @@ public struct CaptureService: Sendable {
         if let cat = item.category { fields["category"] = cat }
         let json = (try? encode(fields)) ?? "{}"
         let category = try categories.canonicalize(item.category)
-        let sentence = sourceText.flatMap {
-            SentenceExtractor.extractSentence(containing: item.word ?? "", from: $0)
-        }
-        let entry = Entry(rawText: item.word ?? "",
+        let entry = Entry(rawText: word,
                           type: CardType.word.rawValue,
                           language: language,
                           sourceApp: source.appName,

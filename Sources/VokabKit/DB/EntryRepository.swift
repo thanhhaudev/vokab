@@ -135,4 +135,26 @@ public struct EntryRepository: Sendable {
             try Int64.fetchAll(db, sql: "SELECT id FROM entries WHERE analysis_state = 'analyzing' ORDER BY captured_at ASC")
         }
     }
+
+    /// Fills capture-context columns that are currently NULL, leaving existing
+    /// values intact. Used by the paragraph dedupe guard so re-capturing a word
+    /// that's already saved enriches it (e.g. its original sentence) without
+    /// clobbering data (SPEC §11, paragraph fixes).
+    public func backfillCaptureContextIfMissing(id: Int64, captureSentence: String?,
+                                                sourceApp: String?, sourceURL: String?) throws {
+        _ = try dbQueue.write { db in
+            if let s = captureSentence {
+                try db.execute(sql: "UPDATE entries SET capture_sentence = ? WHERE id = ? AND capture_sentence IS NULL",
+                               arguments: [s, id])
+            }
+            if let a = sourceApp {
+                try db.execute(sql: "UPDATE entries SET source_app = ? WHERE id = ? AND source_app IS NULL",
+                               arguments: [a, id])
+            }
+            if let u = sourceURL {
+                try db.execute(sql: "UPDATE entries SET source_url = ? WHERE id = ? AND source_url IS NULL",
+                               arguments: [u, id])
+            }
+        }
+    }
 }

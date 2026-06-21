@@ -233,4 +233,22 @@ final class RepositoryTests: XCTestCase {
         XCTAssertEqual(dueCardsResult.count, 1, "dueCards should exclude non-ready entries")
         XCTAssertEqual(dueCardsResult.first?.entry.rawText, "ephemeral")
     }
+
+    func testBackfillCaptureContextOnlyFillsNulls() throws {
+        let q = try VokabDatabase.makeInMemory()
+        let repo = EntryRepository(dbQueue: q)
+        let entry = Entry(rawText: "grasp", type: CardType.word.rawValue, language: "en",
+                          sourceApp: "Safari", sourceURL: nil,
+                          capturedAt: Date(timeIntervalSince1970: 1), aiResult: "{}",
+                          cefr: nil, category: nil, captureSentence: nil)
+        let id = try repo.insertCapture(entry, dueDate: Date(timeIntervalSince1970: 1))
+
+        try repo.backfillCaptureContextIfMissing(
+            id: id, captureSentence: "I grasp it.", sourceApp: "Chrome", sourceURL: "http://x")
+
+        let saved = try XCTUnwrap(repo.entry(id: id))
+        XCTAssertEqual(saved.captureSentence, "I grasp it.")  // was nil → filled
+        XCTAssertEqual(saved.sourceApp, "Safari")             // already set → untouched
+        XCTAssertEqual(saved.sourceURL, "http://x")           // was nil → filled
+    }
 }

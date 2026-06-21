@@ -162,53 +162,19 @@ private struct QuickCaptureView: View {
 
             // MARK: Spell-check confirm gate (shown only when issues detected)
             if !spellIssues.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.bubble").font(.system(size: 11)).foregroundStyle(.orange)
-                        Text(L.t("Possible typos", "Có thể sai chính tả"))
-                            .font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
-                        Spacer()
-                        if spellIssues.contains(where: { $0.suggestion != nil }) {
-                            Button(L.t("Fix all", "Sửa hết")) {
-                                suppressSpellReset = true
-                                text = SpellCheck.fixAll(text, issues: spellIssues); spellIssues = []
-                            }.buttonStyle(.plain).font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.accent)
-                            Text("·").font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
-                        }
-                        Button(L.t("Capture anyway", "Lưu nguyên")) {
-                            forceSubmit = true; submit()
-                        }.buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
-                    }
-                    // Each misspelled word is a chip "word → suggestion"; click to fix just that one.
-                    FlowLayout(spacing: 6) {
-                        ForEach(spellIssues) { issue in
-                            Button {
-                                guard issue.suggestion != nil else { return }
-                                suppressSpellReset = true
-                                text = SpellCheck.fixAll(text, issues: [issue])
-                                spellIssues.removeAll { $0.id == issue.id }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Text(issue.word).foregroundStyle(.orange)
-                                    if let s = issue.suggestion {
-                                        Image(systemName: "arrow.right").font(.system(size: 7)).foregroundStyle(Theme.textTertiary)
-                                        Text(s).foregroundStyle(Theme.textPrimary)
-                                    }
-                                }
-                                .font(.system(size: 11))
-                                .padding(.horizontal, 7).padding(.vertical, 3)
-                                .background(Theme.bgPrimary, in: Capsule())
-                                .overlay(Capsule().strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(issue.suggestion == nil)
-                            .help(issue.suggestion != nil ? L.t("Click to fix", "Bấm để sửa từ này")
-                                                          : L.t("No suggestion", "Không có gợi ý"))
-                        }
-                    }
-                }
-                .padding(8)
-                .background(Theme.bgTertiary, in: RoundedRectangle(cornerRadius: 6))
+                CaptureSpellGate(
+                    issues: spellIssues,
+                    onFixAll: {
+                        suppressSpellReset = true
+                        text = SpellCheck.fixAll(text, issues: spellIssues); spellIssues = []
+                    },
+                    onFixOne: { issue in
+                        suppressSpellReset = true
+                        text = SpellCheck.fixAll(text, issues: [issue])
+                        spellIssues.removeAll { $0.id == issue.id }
+                    },
+                    onCaptureAnyway: { forceSubmit = true; submit() }
+                )
             }
 
             HStack(spacing: 6) {

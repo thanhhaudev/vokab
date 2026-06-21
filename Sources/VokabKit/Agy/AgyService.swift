@@ -6,10 +6,14 @@ import Foundation
 public struct AgyService: Sendable {
     private let runner: AgyRunner
     private let settings: VokabSettings
+    /// Optional in-flight tracker; brackets every call so the UI can show a
+    /// "AI is working" indicator for all background agy work.
+    private let activity: AgyActivity?
 
-    public init(runner: AgyRunner, settings: VokabSettings) {
+    public init(runner: AgyRunner, settings: VokabSettings, activity: AgyActivity? = nil) {
         self.runner = runner
         self.settings = settings
+        self.activity = activity
     }
 
     public func defineWord(_ word: String, language: String) async throws -> WordCard {
@@ -145,6 +149,8 @@ public struct AgyService: Sendable {
 
     private func callAndDecode<T: Decodable>(_ type: T.Type, prompt: String, model: String? = nil) async throws -> T {
         let useModel = model ?? settings.model
+        activity?.begin()
+        defer { activity?.end() }
         do {
             let raw = try await runner.run(prompt: prompt, model: useModel)
             return try JSONCleaning.decode(T.self, from: raw)

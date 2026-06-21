@@ -21,14 +21,9 @@ struct VokabApp: App {
         MenuBarExtra {
             MenubarPopoverView().environmentObject(env)
         } label: {
-            HStack(spacing: MenubarIcon.dotGap) {
-                Image(nsImage: MenubarIcon.idle())
-                if env.activeAnalyses > 0 {
-                    Circle()
-                        .fill(MenubarIcon.activityDotColor)
-                        .frame(width: MenubarIcon.dotDiameter, height: MenubarIcon.dotDiameter)
-                }
-            }
+            // One image (V, or V + amber dot when analyzing). MenuBarExtra clips a
+            // multi-view label to one icon slot, so the dot must live inside the image.
+            Image(nsImage: env.activeAnalyses > 0 ? MenubarIcon.processing(pulse: env.pulse) : MenubarIcon.idle())
         }
         .menuBarExtraStyle(.window)
 

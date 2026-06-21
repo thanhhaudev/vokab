@@ -14,6 +14,11 @@ final class AppEnvironment: ObservableObject {
     /// init — agy model/path/timeout — still take effect on next launch.)
     @Published var settings: VokabSettings
     @Published var activeAnalyses: Int = 0
+    /// Breathing alpha (0.4…1.0) for the menubar activity dot while analyzing.
+    /// Driven by a timer only when `activeAnalyses > 0`; 1.0 when idle.
+    @Published var pulse: Double = 1.0
+    private var pulseTimer: Timer?
+    private var pulseTick = 0
     let dbQueue: DatabaseQueue
     let entries: EntryRepository
     let review: ReviewRepository
@@ -31,7 +36,9 @@ final class AppEnvironment: ObservableObject {
     let phraseErrorBackfiller: PhraseErrorBackfiller
     let translation: TranslationService
     let antigravityQuota: AntigravityQuotaService
-    private(set) var captureWorker: CaptureWorker
+    let captureWorker: CaptureWorker
+    /// Tracks all in-flight agy calls; drives the menubar activity dot.
+    private let agyActivity: AgyActivity
     private var redQuotaGate = RedNotificationGate()
 
     init(queue: DatabaseQueue, settings: VokabSettings) {
@@ -40,7 +47,9 @@ final class AppEnvironment: ObservableObject {
         let entries = EntryRepository(dbQueue: queue)
         let cache = CacheRepository(dbQueue: queue)
         let quota = QuotaRepository(dbQueue: queue)
-        let agy = AgyService(runner: AgyClient(settings: settings), settings: settings)
+        let agyActivity = AgyActivity()
+        let agy = AgyService(runner: AgyClient(settings: settings), settings: settings, activity: agyActivity)
+        self.agyActivity = agyActivity
         let categories = CategoryService(dbQueue: queue)
         self.entries = entries
         self.cache = cache
@@ -64,10 +73,6 @@ final class AppEnvironment: ObservableObject {
         self.phraseErrorBackfiller = PhraseErrorBackfiller(agy: agy, entries: entries)
         self.translation = TranslationService(agy: agy, cache: cache)
         self.antigravityQuota = AntigravityQuotaService.live()
-        // The three non-activity callbacks are identical across both init phases;
-        // define them once. (Two-phase init is required: phase 1 assigns
-        // captureWorker so `self` is fully initialized, then phase 2 rebuilds it
-        // with an onActivity closure that can finally capture [weak self].)
         let onWorkerChange: @Sendable () -> Void = {
             Task { @MainActor in WindowManager.notifyDataChanged() }
         }
@@ -80,17 +85,47 @@ final class AppEnvironment: ObservableObject {
         let onWorkerComplete: @Sendable (Int64, CaptureService.AnalysisOutcome) -> Void = { id, outcome in
             Task { @MainActor in CaptureController.shared.entryCompleted(id, outcome) }
         }
-        // Phase 1: assign captureWorker so all stored properties are initialized.
         self.captureWorker = CaptureWorker(
             capture: self.capture, maxConcurrent: settings.maxConcurrent,
             onChange: onWorkerChange, onFailure: onWorkerFailure, onComplete: onWorkerComplete)
-        // Phase 2: self is now fully initialized; rebuild with onActivity wired in.
-        self.captureWorker = CaptureWorker(
-            capture: self.capture, maxConcurrent: settings.maxConcurrent,
-            onChange: onWorkerChange, onFailure: onWorkerFailure, onComplete: onWorkerComplete,
-            onActivity: { [weak self] count in
-                Task { @MainActor in self?.activeAnalyses = count }
-            })
+        // All stored properties are now set, so `self` may be captured. The menubar
+        // activity dot reflects EVERY agy call — capture analysis, enrichment,
+        // backfill, translation, extraction, grading — via the shared tracker.
+        agyActivity.setOnChange { [weak self] count in
+            Task { @MainActor in self?.updateActivity(count) }
+        }
+    }
+
+    /// Updates the activity count and starts/stops the dot's pulse accordingly.
+    @MainActor private func updateActivity(_ count: Int) {
+        activeAnalyses = count
+        if count > 0 { startPulse() } else { stopPulse() }
+    }
+
+    @MainActor private func startPulse() {
+        guard pulseTimer == nil else { return }
+        // ~15fps is smooth enough for a breathing dot and cheap to redraw.
+        let timer = Timer(timeInterval: 1.0 / 15.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.advancePulse() }
+        }
+        // .common so it keeps firing while a menu/popover is in tracking mode.
+        RunLoop.main.add(timer, forMode: .common)
+        pulseTimer = timer
+    }
+
+    @MainActor private func advancePulse() {
+        pulseTick += 1
+        let period = 1.2   // seconds per breath
+        let t = Double(pulseTick) / 15.0
+        let s = 0.5 + 0.5 * sin(2 * Double.pi * t / period)
+        pulse = 0.4 + 0.6 * s
+    }
+
+    @MainActor private func stopPulse() {
+        pulseTimer?.invalidate()
+        pulseTimer = nil
+        pulseTick = 0
+        pulse = 1.0
     }
 
     /// Re-queues a failed entry's background analysis.

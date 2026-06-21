@@ -1,8 +1,9 @@
 import AppKit
+import VokabKit
 
 /// Local spelling check via NSSpellChecker (no network, no quota).
 enum SpellCheck {
-    struct Issue: Identifiable { let id = UUID(); let word: String; let suggestion: String? }
+    struct Issue: Identifiable { let id = UUID(); let word: String; let suggestion: String?; let kind: SpellIssueKind }
 
     /// Misspelled words (with a top suggestion) for `text` in `language` (BCP-47,
     /// e.g. "en"). Returns [] for non-English or when no checker is available, so
@@ -23,7 +24,9 @@ enum SpellCheck {
                 seen.insert(word.lowercased())
                 let guesses = checker.guesses(forWordRange: range, in: text, language: "en",
                                               inSpellDocumentWithTag: 0)
-                found.append(Issue(word: word, suggestion: guesses?.first))
+                let suggestion = guesses?.first
+                found.append(Issue(word: word, suggestion: suggestion,
+                                   kind: SpellIssueKind.classify(word: word, hasSuggestion: suggestion != nil)))
             }
             start = range.location + range.length
         }

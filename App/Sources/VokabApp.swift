@@ -21,7 +21,9 @@ struct VokabApp: App {
         MenuBarExtra {
             MenubarPopoverView().environmentObject(env)
         } label: {
-            Image(nsImage: env.activeAnalyses > 0 ? MenubarIcon.processing() : MenubarIcon.idle())
+            // One image (V, or V + amber dot when analyzing). MenuBarExtra clips a
+            // multi-view label to one icon slot, so the dot must live inside the image.
+            Image(nsImage: env.activeAnalyses > 0 ? MenubarIcon.processing(pulse: env.pulse) : MenubarIcon.idle())
         }
         .menuBarExtraStyle(.window)
 

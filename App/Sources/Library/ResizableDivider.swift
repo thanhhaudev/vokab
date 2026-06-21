@@ -9,14 +9,20 @@ import VokabKit
 struct ResizableDivider: View {
     @Binding var width: Double
     let range: ClosedRange<Double>
+    /// The width currently rendered, which can exceed `width` when the pane is
+    /// absorbing surplus space (list "ăn dư"). Used as the drag origin so the
+    /// first drag tick doesn't snap back to the stored `width`.
+    var baseline: Double?
     var onCommit: (Double) -> Void = { _ in }
 
     @State private var dragStart: Double?
     @State private var hovering = false
 
-    init(width: Binding<Double>, range: ClosedRange<Double>, onCommit: @escaping (Double) -> Void = { _ in }) {
+    init(width: Binding<Double>, range: ClosedRange<Double>, baseline: Double? = nil,
+         onCommit: @escaping (Double) -> Void = { _ in }) {
         self._width = width
         self.range = range
+        self.baseline = baseline
         self.onCommit = onCommit
     }
 
@@ -43,7 +49,7 @@ struct ResizableDivider: View {
                 // back into the delta and the drag would oscillate/shake.
                 DragGesture(minimumDistance: 1, coordinateSpace: .global)
                     .onChanged { value in
-                        let start = dragStart ?? width
+                        let start = dragStart ?? baseline ?? width
                         if dragStart == nil { dragStart = start }
                         width = PaneWidth.clamp(start + Double(value.translation.width), to: range)
                     }

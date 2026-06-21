@@ -17,9 +17,12 @@ struct LibraryView: View {
     // Persisted across launches; the live @State values drive layout during a
     // drag so we don't write UserDefaults every frame (that caused jank).
     @AppStorage("library.sidebarWidth") private var storedSidebarWidth: Double = 172
-    @AppStorage("library.mainWidth") private var storedMainWidth: Double = 320
+    // List's share of the list+detail content area (0…1). A fraction (not an
+    // absolute width) keeps the split balanced across window sizes; default 0.42
+    // is a balanced middle that the divider can shift either way.
+    @AppStorage("library.listFraction") private var storedListFraction: Double = 0.42
     @State private var sidebarWidth: Double = 172
-    @State private var mainWidth: Double = 320
+    @State private var listFraction: Double = 0.42
     @State private var reloadPulse = false
     @State private var showCooldownNote = false
 
@@ -50,8 +53,18 @@ struct LibraryView: View {
             // and the row pins leading so the sidebar is never cut off.
             let gap: CGFloat = 12               // two dividers
             let avail = geo.size.width
-            let sw = max(150, min(CGFloat(sidebarWidth), avail - gap - 240 - 380))
-            let mw = max(240, min(CGFloat(mainWidth), avail - gap - sw - 380))
+            // Sidebar is clamped first so it never eats the list+detail minimums.
+            let sw = max(150, min(CGFloat(sidebarWidth), avail - gap - 240 - 360))
+            // The list↔detail split is proportional (balanced at any window size)
+            // and freely draggable in both directions within `panes.dragRange`.
+            let content = max(0, Double(avail) - Double(gap) - Double(sw))
+            let panes = PaneWidth.split(available: Double(avail), sidebar: Double(sw),
+                                        listFraction: listFraction)
+            // The divider drags in points; convert to/from the stored fraction.
+            let listPx = Binding<Double>(
+                get: { panes.list },
+                set: { px in if content > 0 { listFraction = PaneWidth.clamp(px / content, to: 0...1) } }
+            )
             HStack(spacing: 0) {
                 sidebar.frame(width: sw)
                 ResizableDivider(width: $sidebarWidth, range: 150...300) { storedSidebarWidth = $0 }
@@ -59,8 +72,9 @@ struct LibraryView: View {
                     DashboardView(env: env, model: model)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    main.frame(width: mw)
-                    ResizableDivider(width: $mainWidth, range: 240...640) { storedMainWidth = $0 }
+                    main.frame(width: CGFloat(panes.list))
+                    ResizableDivider(width: listPx, range: panes.dragRange,
+                                     baseline: panes.list) { _ in storedListFraction = listFraction }
                     detailPane.frame(maxWidth: .infinity)
                 }
             }
@@ -70,7 +84,7 @@ struct LibraryView: View {
         .onAppear {
             model.load()
             sidebarWidth = storedSidebarWidth
-            mainWidth = storedMainWidth
+            listFraction = storedListFraction
             // A freshly opened Library may have been asked to focus a specific entry.
             if let id = WindowManager.shared.consumePendingSelection() {
                 selected = (try? env.entries.entry(id: id)) ?? nil

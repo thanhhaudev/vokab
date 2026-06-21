@@ -8,3 +8,4 @@ DerivedData/
 *.sqlite
 .build/
 App/vokab.xcodeproj/
+dist/

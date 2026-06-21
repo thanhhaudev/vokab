@@ -14,7 +14,14 @@ DERIVED  := build
 APP      := $(DERIVED)/Build/Products/$(CONFIG)/vokab.app
 INSTALLED := /Applications/vokab.app
 
-.PHONY: all run build open kill restart generate test clean help install
+# Release packaging
+VERSION      := $(shell grep -m1 'MARKETING_VERSION' App/project.yml | sed 's/.*"\(.*\)".*/\1/')
+RELEASE_APP  := $(DERIVED)/Build/Products/Release/vokab.app
+ENTITLEMENTS := App/vokab.entitlements
+STAGE        := $(DERIVED)/dmg
+DMG          := dist/vokab-$(VERSION).dmg
+
+.PHONY: all run build open kill restart generate test clean help install release publish
 
 all: build
 
@@ -60,9 +67,31 @@ test:
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration $(CONFIG) \
 		-derivedDataPath $(DERIVED) CODE_SIGNING_ALLOWED=NO test -quiet
 
+## release: build Release, ad-hoc sign, and package dist/vokab-<version>.dmg
+##   The DMG is ad-hoc signed (no Apple Developer account, not notarized), so
+##   anyone who downloads it must clear quarantine before first launch:
+##     xattr -dr com.apple.quarantine /Applications/vokab.app
+release:
+	@[ -d "$(PROJECT)" ] || $(MAKE) generate
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release \
+		-derivedDataPath $(DERIVED) CODE_SIGNING_ALLOWED=NO build -quiet
+	codesign --force --sign - --entitlements "$(ENTITLEMENTS)" --timestamp=none "$(RELEASE_APP)"
+	rm -rf "$(STAGE)" "$(DMG)"
+	mkdir -p "$(STAGE)" dist
+	cp -R "$(RELEASE_APP)" "$(STAGE)/"
+	ln -s /Applications "$(STAGE)/Applications"
+	hdiutil create -volname "vokab $(VERSION)" -srcfolder "$(STAGE)" -ov -format UDZO "$(DMG)"
+	@echo "Built $(DMG)"
+	@echo "Publish with: make publish"
+
+## publish: print the gh command to create the GitHub release for this version
+publish:
+	@[ -f "$(DMG)" ] || { echo "No DMG — run 'make release' first."; exit 1; }
+	@echo "gh release create v$(VERSION) \"$(DMG)\" --title \"v$(VERSION)\" --notes \"vokab v$(VERSION)\""
+
 ## clean: remove the local build directory
 clean:
-	rm -rf $(DERIVED)
+	rm -rf $(DERIVED) dist
 
 ## help: list the available targets
 help:

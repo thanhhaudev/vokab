@@ -1,56 +1,76 @@
 # vokab
 
-> Capture vocabulary from **any** macOS app with a right-click, let an AI engine analyze it, and review it with spaced repetition — all **local**, no backend, no account.
-
-vokab is a native macOS menubar app. Select a word, phrase, or paragraph in any application, send it to vokab via the **Services** menu, and it’s analyzed by the [`agy`](https://github.com/) CLI (CEFR level, meaning, examples, etymology…), stored in a local SQLite database, and scheduled for review with the SM-2 algorithm. Your vocabulary and where you found it never leave your machine.
-
-## Features
-
-- **One-gesture capture** — right-click → *Capture to vokab* from any app (uses macOS Services; no Accessibility permission needed).
-- **Four card types** — single word, phrase/idiom, paragraph extraction, and production (writing) practice — each with a tailored AI analysis.
-- **Spaced repetition** — SM-2 with recognition cards first, production (write-a-sentence, AI-graded) cards once a word matures.
-- **All local & private** — vocabulary + source context live in SQLite on your Mac. No server.
-- **Menubar agent** — lightweight background app; due-count, quick review, and daily digest in the menubar popover.
-
-## Architecture
-
-Native Swift/SwiftUI, all-local, **no backend**:
-
-```
-select text → Services → vokab → agy CLI → JSON → SQLite (GRDB) → SM-2 review
-```
-
-- **`VokabKit`** (Swift package) — all logic: agy wrapper, card models, GRDB storage, SM-2, capture orchestration. Unit-tested offline.
-- **App target** — SwiftUI UI, menubar agent, Services handler, notifications. Thin layer over `VokabKit`.
+**vokab** is a macOS menubar app that bullies Antigravity (`agy`) into being a dictionary. Look up any word from any app; results are saved locally and reviewed with SM-2.
 
 ## Requirements
 
-- macOS 14+
-- Xcode 26+
-- [`agy`](https://github.com/) CLI installed and logged in (the AI engine; vokab calls it as a subprocess — there is no API-key field in the app, auth is managed by `agy`).
-- [`xcodegen`](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
+- macOS 14 or later.
+- Antigravity (`agy`) installed at `~/.local/bin/agy` and logged in. vokab calls it as a subprocess — there is no API-key field; `agy` manages auth.
+- Accessibility permission, so the capture hotkey can read your current selection.
 
-## Build
+## Install
+
+### Download a build
+
+1. Download the latest `vokab-<version>.dmg` from [Releases](../../releases).
+2. Open it and drag **vokab.app** into **Applications**.
+3. Clear the download quarantine — the app is ad-hoc signed, not notarized:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/vokab.app
+   ```
+4. Launch vokab from Applications.
+
+### Build from source
+
+Requires Xcode 26+ and `xcodegen` (`brew install xcodegen`).
 
 ```bash
-# generate the Xcode project (not committed — derived from App/project.yml)
-cd App && xcodegen generate
-
-# build (ad-hoc signed — no Apple Developer account required)
-xcodebuild -project vokab.xcodeproj -scheme vokab -configuration Debug \
-  build CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO
-
-# or open in Xcode
-open vokab.xcodeproj
+git clone <repo-url> && cd vokab
+make install     # build, copy to /Applications, launch
 ```
 
-Run the engine/logic tests (no `agy` needed):
+A locally built app is not quarantined, so no `xattr` step is needed.
+
+## First run
+
+vokab lives in the menubar (no Dock icon). To set up capture:
+
+1. Open **Settings** from the menubar popover.
+2. Set a **global hotkey** and enable it.
+3. Grant **Accessibility** when prompted (System Settings → Privacy & Security → Accessibility). The hotkey reads your selection by synthesizing ⌘C, which needs this permission.
+4. If `agy` is not at `~/.local/bin/agy`, set its path in Settings.
+
+To capture: select text in any app and press your hotkey. vokab looks it up and saves it. Review due cards from the menubar popover.
+
+## Upgrading
+
+Download the new DMG and replace the app, then re-run the `xattr` command. Because the app is ad-hoc signed, each build has a different signature, so macOS treats it as a new app — you must **re-grant Accessibility** (System Settings → Privacy & Security → Accessibility: remove the old entry, add the new one).
+
+## How it works
+
+```
+select text → hotkey → agy → JSON → SQLite (GRDB) → SM-2 review
+```
+
+- **`VokabKit`** (Swift package) — all logic: agy wrapper, card models, GRDB storage, SM-2, capture orchestration. Unit-tested offline.
+- **App target** — SwiftUI UI, menubar agent, notifications. A thin layer over `VokabKit`.
+
+## Building & tests
+
+```bash
+make build       # compile
+make run         # build + launch
+make release     # Release build → ad-hoc sign → dist/vokab-<version>.dmg
+make help        # list all targets
+```
+
+Engine/logic tests (no `agy` needed):
 
 ```bash
 swift test
 ```
 
-Run the real-`agy` contract tests (requires `agy` installed & logged in):
+Real-`agy` contract tests (require `agy` installed & logged in):
 
 ```bash
 VOKAB_AGY_INTEGRATION=1 swift test
@@ -58,7 +78,7 @@ VOKAB_AGY_INTEGRATION=1 swift test
 
 ## Code signing
 
-The committed project uses **ad-hoc signing** (`CODE_SIGN_IDENTITY = "-"`, no team) so anyone can clone and build locally without an Apple Developer account. To sign with your own identity, put your settings in a `*.local.xcconfig` (gitignored) — never commit a team ID.
+The project uses ad-hoc signing (`CODE_SIGN_IDENTITY = "-"`, no team) so anyone can clone and build without an Apple Developer account. Released DMGs are ad-hoc signed too, not notarized — hence the `xattr` step on download. To sign with your own identity, put your settings in a `*.local.xcconfig` (gitignored); never commit a team ID.
 
 ## License
 

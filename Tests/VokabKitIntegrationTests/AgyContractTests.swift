@@ -32,9 +32,9 @@ final class AgyContractTests: XCTestCase {
         try IntegrationGate.skipUnlessEnabled()
         let text = "The ubiquitous nature of smartphones has engendered a profound, " +
                    "perhaps ephemeral, shift in how we cultivate attention."
-        let items = try await makeService().extractFromParagraph(text, taxonomy: [])
-        XCTAssertFalse(items.isEmpty, "expected at least one extracted item")
-        XCTAssertNotNil(items.first?.word)
+        let extraction = try await makeService().extractFromParagraph(text, taxonomy: [])
+        XCTAssertFalse(extraction.items.isEmpty, "expected at least one extracted item")
+        XCTAssertNotNil(extraction.items.first?.word)
     }
 
     func testProductionContract() async throws {

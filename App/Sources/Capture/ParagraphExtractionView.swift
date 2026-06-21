@@ -10,6 +10,7 @@ struct ParagraphExtractionView: View {
     let language: String
     let rawText: String
     let onClose: () -> Void
+    let translationVi: String?
 
     @State private var items: [ParagraphItem]
     @State private var selected: Set<Int> = []
@@ -18,9 +19,10 @@ struct ParagraphExtractionView: View {
     @State private var working = false
     @State private var errorText: String?
 
-    init(items: [ParagraphItem], source: SourceContext, language: String,
+    init(items: [ParagraphItem], translationVi: String? = nil, source: SourceContext, language: String,
          rawText: String, onClose: @escaping () -> Void) {
         _items = State(initialValue: items)
+        self.translationVi = translationVi
         self.source = source
         self.language = language
         self.rawText = rawText
@@ -229,7 +231,7 @@ struct ParagraphExtractionView: View {
         Task {
             do {
                 let newItems = try await env.capture.reextractParagraph(
-                    text: rawText, language: language, minLevel: lvl)
+                    text: rawText, language: language, minLevel: lvl).items
                 await MainActor.run {
                     items = newItems
                     recomputeSelection()

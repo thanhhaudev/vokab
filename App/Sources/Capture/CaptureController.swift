@@ -15,7 +15,7 @@ final class CaptureController: ObservableObject {
     private var gate: AsyncSemaphore?
     private var gateLimit = 0
     /// Last paragraph capture's candidates, so the toast's View can reopen extraction.
-    private var pendingParagraph: (items: [ParagraphItem], source: SourceContext, language: String, rawText: String)?
+    private var pendingParagraph: (items: [ParagraphItem], translationVi: String?, source: SourceContext, language: String, rawText: String)?
     /// Per-entry toast updaters, fired by `entryCompleted` when background analysis finishes.
     private var pendingToasts: [Int64: @MainActor (CaptureService.AnalysisOutcome) -> Void] = [:]
 
@@ -86,11 +86,12 @@ final class CaptureController: ObservableObject {
                                                                source: src, forcedType: forcedType,
                                                                minLevelOverride: minLevel)
                     let summary = Self.summary(result, text: trimmed, env: env)
-                    pendingParagraph = (result.paragraphItems, src, language, trimmed)
+                    pendingParagraph = (result.paragraphItems, result.translationVi, src, language, trimmed)
                     model.onView = { [weak self] in self?.reopenExtraction() }
                     model.phase = .resolved(entry: nil, fallback: summary, wasDuplicate: false)
-                    WindowManager.shared.showExtraction(items: result.paragraphItems, source: src,
-                                                        language: language, rawText: trimmed)
+                    WindowManager.shared.showExtraction(items: result.paragraphItems,
+                                                        translationVi: result.translationVi,
+                                                        source: src, language: language, rawText: trimmed)
 
                 case .duplicate(let entryId, _):
                     let entry = try? env.entries.entry(id: entryId)
@@ -185,8 +186,8 @@ final class CaptureController: ObservableObject {
     func openEntry(_ id: Int64) { WindowManager.shared.showLibrary(select: id) }
     func reopenExtraction() {
         guard let p = pendingParagraph else { openLibrary(); return }
-        WindowManager.shared.showExtraction(items: p.items, source: p.source,
-                                            language: p.language, rawText: p.rawText)
+        WindowManager.shared.showExtraction(items: p.items, translationVi: p.translationVi,
+                                            source: p.source, language: p.language, rawText: p.rawText)
     }
 
     func openCaptureResult(_ id: Int64) { WindowManager.shared.showCaptureResult(entryId: id) }

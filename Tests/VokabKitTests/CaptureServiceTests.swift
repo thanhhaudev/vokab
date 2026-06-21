@@ -128,7 +128,7 @@ final class CaptureServiceTests: XCTestCase {
 
     func testParagraphReturnsItemsAndChargesQuota() async throws {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let h = try makeHarness([.respond(#"[{"word":"ubiquitous","cefr":"C1"},{"word":"engender","cefr":"C2"}]"#)])
+        let h = try makeHarness([.respond(#"{"translation_vi":"Bản dịch.","items":[{"word":"ubiquitous","cefr":"C1"},{"word":"engender","cefr":"C2"}]}"#)])
         let text = "The ubiquitous nature of things engenders change. It is everywhere now."
 
         let result = try await h.service.capture(text: text, language: "en", source: source(now))
@@ -136,6 +136,8 @@ final class CaptureServiceTests: XCTestCase {
         XCTAssertEqual(result.paragraphItems.count, 2)
         XCTAssertNil(result.entryId)                    // not auto-persisted
         XCTAssertEqual(try h.quota.count(on: now), 1)
+        XCTAssertEqual(result.translationVi, "Bản dịch.")
+        XCTAssertEqual(result.failedChunks, 0)
 
         // Persisting a chosen item creates a first-class WORD entry (so it gets
         // full detail + enrichment, like a typed word) seeded with the item's fields.
@@ -149,23 +151,23 @@ final class CaptureServiceTests: XCTestCase {
     func testReextractCachesPerMinLevel() async throws {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let h = try makeHarness([
-            .respond(#"[{"word":"alpha","cefr":"B2"}]"#),   // 1st call (B2)
-            .respond(#"[{"word":"beta","cefr":"C1"}]"#),     // 2nd call (C1)
+            .respond(#"{"translation_vi":"t1","items":[{"word":"alpha","cefr":"B2"}]}"#),
+            .respond(#"{"translation_vi":"t2","items":[{"word":"beta","cefr":"C1"}]}"#),
         ])
         let text = "some paragraph text worth analyzing here"
 
         let b2 = try await h.service.reextractParagraph(text: text, language: "en", minLevel: .b2, now: now)
-        XCTAssertEqual(b2.first?.word, "alpha")
+        XCTAssertEqual(b2.items.first?.word, "alpha")
         XCTAssertEqual(h.runner.callCount, 1)
 
         // Same level → cache hit, no extra agy call.
         let b2again = try await h.service.reextractParagraph(text: text, language: "en", minLevel: .b2, now: now)
-        XCTAssertEqual(b2again.first?.word, "alpha")
+        XCTAssertEqual(b2again.items.first?.word, "alpha")
         XCTAssertEqual(h.runner.callCount, 1)
 
         // Different level → cache miss, new agy call.
         let c1 = try await h.service.reextractParagraph(text: text, language: "en", minLevel: .c1, now: now)
-        XCTAssertEqual(c1.first?.word, "beta")
+        XCTAssertEqual(c1.items.first?.word, "beta")
         XCTAssertEqual(h.runner.callCount, 2)
         XCTAssertEqual(try h.quota.count(on: now), 2)        // two real calls charged
     }
@@ -174,9 +176,9 @@ final class CaptureServiceTests: XCTestCase {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let h = try makeHarness([])                          // runner throws if called
         try h.cache.upsert(text: "p", language: "en", minLevel: .b1,
-                           aiResult: #"[{"word":"x"}]"#, now: now)
-        let items = try await h.service.reextractParagraph(text: "p", language: "en", minLevel: .b1, now: now)
-        XCTAssertEqual(items.first?.word, "x")
+                           aiResult: #"{"translation_vi":"t","items":[{"word":"x"}]}"#, now: now)
+        let fetch = try await h.service.reextractParagraph(text: "p", language: "en", minLevel: .b1, now: now)
+        XCTAssertEqual(fetch.items.first?.word, "x")
         XCTAssertEqual(h.runner.callCount, 0)
         XCTAssertEqual(try h.quota.count(on: now), 0)
     }
@@ -215,7 +217,7 @@ final class CaptureServiceTests: XCTestCase {
 
     func testForcedParagraphHonorsMinLevelOverride() async throws {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let h = try makeHarness([.respond(#"[{"word":"alpha","cefr":"C1"}]"#)])
+        let h = try makeHarness([.respond(#"{"items":[{"word":"alpha","cefr":"C1"}]}"#)])
         let result = try await h.service.capture(text: "two words here", language: "en",
                                                  source: source(now),
                                                  forcedType: .paragraphItem, minLevelOverride: .c1)
@@ -227,7 +229,7 @@ final class CaptureServiceTests: XCTestCase {
 
     func testPersistParagraphItemStoresExtractedSentence() async throws {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let h = try makeHarness([.respond(#"[{"word":"ubiquitous","cefr":"C1"}]"#)])
+        let h = try makeHarness([.respond(#"{"items":[{"word":"ubiquitous","cefr":"C1"}]}"#)])
         let text = "The ubiquitous nature of things engenders change. It is everywhere now."
         let result = try await h.service.capture(text: text, language: "en", source: source(now))
 
@@ -239,7 +241,7 @@ final class CaptureServiceTests: XCTestCase {
 
     func testPersistParagraphItemWithoutSourceTextStoresNil() async throws {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let h = try makeHarness([.respond(#"[{"word":"ubiquitous","cefr":"C1"}]"#)])
+        let h = try makeHarness([.respond(#"{"items":[{"word":"ubiquitous","cefr":"C1"}]}"#)])
         let text = "The ubiquitous nature of things engenders change."
         let result = try await h.service.capture(text: text, language: "en", source: source(now))
 

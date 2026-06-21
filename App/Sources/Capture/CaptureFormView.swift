@@ -11,6 +11,11 @@ struct CaptureFormView: View {
     @FocusState private var focused: Bool
     @State private var typeChoice: TypeChoice = .auto
     @State private var langOverride: String?
+    @State private var spellIssues: [SpellCheck.Issue] = []
+    @State private var forceSubmit = false
+    /// Set right before a programmatic text edit so the text change below doesn't wipe chips.
+    @State private var suppressSpellReset = false
+    private var isParagraph: Bool { effectiveType == .paragraphItem }
 
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var effectiveType: CardType { typeChoice.forcedType ?? CaptureDetection.type(text) }
@@ -31,6 +36,10 @@ struct CaptureFormView: View {
                 TextField(L.t("Enter a word or phrase…", "Nhập từ hoặc cụm từ…"), text: $text, axis: .vertical)
                     .textFieldStyle(.plain).font(.system(size: 14)).lineLimit(1...6).focused($focused)
                     .onSubmit(submit)
+                    .onChange(of: text) { _, _ in
+                        if suppressSpellReset { suppressSpellReset = false; return }
+                        spellIssues = []; forceSubmit = false
+                    }
                 Button(action: paste) {
                     Image(systemName: "doc.on.clipboard").font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
                         .frame(width: 26, height: 20)   // fixed size so it matches the ⏎ badge exactly
@@ -78,6 +87,23 @@ struct CaptureFormView: View {
                     .font(.system(size: 10)).foregroundStyle(Theme.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 11).padding(.bottom, 9)
+
+                if !spellIssues.isEmpty {
+                    CaptureSpellGate(
+                        issues: spellIssues,
+                        onFixAll: {
+                            suppressSpellReset = true
+                            text = SpellCheck.fixAll(text, issues: spellIssues); spellIssues = []
+                        },
+                        onFixOne: { issue in
+                            suppressSpellReset = true
+                            text = SpellCheck.fixAll(text, issues: [issue])
+                            spellIssues.removeAll { $0.id == issue.id }
+                        },
+                        onCaptureAnyway: { forceSubmit = true; submit() }
+                    )
+                    .padding(.horizontal, 11).padding(.bottom, 10)
+                }
             }
         }
         .background(Theme.bgSecondary)
@@ -95,9 +121,16 @@ struct CaptureFormView: View {
 
     private func submit() {
         guard !trimmed.isEmpty else { return }
+        // Local spell/gibberish gate (word & phrase only). Paragraphs are word
+        // harvests full of proper nouns — checking them is just noise.
+        if !forceSubmit && !isParagraph {
+            let issues = SpellCheck.issues(in: trimmed, language: detectedLang)
+            if !issues.isEmpty { spellIssues = issues; return }   // show gate, don't submit yet
+        }
         CaptureController.shared.capture(trimmed, source: SourceContext(appName: "Manual entry"),
                                          language: langOverride, type: typeChoice.forcedType)
         text = ""; typeChoice = .auto; langOverride = nil; focused = false
+        spellIssues = []; forceSubmit = false
     }
 
     /// Replaces the field with the clipboard's text and focuses it (so a pasted

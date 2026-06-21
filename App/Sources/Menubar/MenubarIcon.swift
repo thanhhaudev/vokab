@@ -20,6 +20,31 @@ enum MenubarIcon {
         return image
     }
 
+    /// V + amber activity dot. Non-template (it carries color), so the V is
+    /// stroked in the menubar's current text color to stay visible in light/dark.
+    static func processing() -> NSImage {
+        let amber = NSColor(srgbRed: 0xEF / 255.0, green: 0x9F / 255.0, blue: 0x27 / 255.0, alpha: 1)
+        let image = NSImage(size: size, flipped: false) { rect in
+            // Leave room at lower-right for the dot so the V doesn't overlap it.
+            let vRect = NSRect(x: rect.minX, y: rect.minY + rect.height * 0.18,
+                               width: rect.width * 0.82, height: rect.height * 0.82)
+            drawChevron(in: vRect, color: menubarForeground())
+            let d = rect.width * 0.34
+            let dot = NSRect(x: rect.maxX - d, y: rect.minY, width: d, height: d)
+            amber.setFill()
+            NSBezierPath(ovalIn: dot).fill()
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+
+    /// Best-effort menubar foreground color for the current appearance.
+    private static func menubarForeground() -> NSColor {
+        let dark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        return dark ? .white : .black
+    }
+
     /// Strokes the V chevron centered in `rect`, scaled from the SVG's 512 space.
     static func drawChevron(in rect: NSRect, color: NSColor) {
         // SVG points in 512 space: left top, bottom vertex, right top.

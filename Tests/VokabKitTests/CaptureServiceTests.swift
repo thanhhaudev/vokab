@@ -335,4 +335,39 @@ final class CaptureServiceTests: XCTestCase {
             capturedAt: Date(), aiResult: "{}"), dueDate: Date())
         if case .duplicate = try h.capture.beginCapture(text: "stubborn", language: "en", source: src) {} else { XCTFail() }
     }
+
+    // MARK: - Chunked paragraph extraction (Task 7)
+
+    /// 130 words across 13 sentences → 2 chunks at the 120-word threshold.
+    private func longText() -> String {
+        (1...13).map { i in "word\(i)a word\(i)b word\(i)c word\(i)d word\(i)e word\(i)f word\(i)g word\(i)h word\(i)i sentence\(i)." }
+            .joined(separator: " ")
+    }
+
+    func testLongParagraphChunksAndMergesAndChargesPerChunk() async throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let h = try makeHarness([
+            .respond(#"{"translation_vi":"Phần một. ","items":[{"word":"alpha","cefr":"B2"}]}"#),
+            .respond(#"{"translation_vi":"Phần hai.","items":[{"word":"beta","cefr":"C1"},{"word":"alpha","cefr":"B2"}]}"#),
+        ])
+        let result = try await h.service.capture(text: longText(), language: "en", source: source(now))
+        XCTAssertEqual(h.runner.callCount, 2)                       // chunked into 2 calls
+        XCTAssertEqual(result.paragraphItems.map { $0.word }, ["alpha", "beta"]) // merged, deduped
+        XCTAssertEqual(result.translationVi, "Phần một. Phần hai.")  // concatenated in order
+        XCTAssertEqual(try h.quota.count(on: now), 2)              // one per successful chunk
+        XCTAssertEqual(result.failedChunks, 0)
+    }
+
+    func testPartialChunkFailureKeepsSuccessesAndCountsFailure() async throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        // 1st chunk OK; 2nd chunk fails (timeout) — transport errors are NOT retried.
+        let h = try makeHarness([
+            .respond(#"{"translation_vi":"OK.","items":[{"word":"alpha","cefr":"B2"}]}"#),
+            .fail(.timeout),
+        ])
+        let result = try await h.service.capture(text: longText(), language: "en", source: source(now))
+        XCTAssertEqual(result.paragraphItems.map { $0.word }, ["alpha"]) // success kept
+        XCTAssertEqual(result.failedChunks, 1)
+        XCTAssertEqual(try h.quota.count(on: now), 1)              // failed chunk not charged
+    }
 }

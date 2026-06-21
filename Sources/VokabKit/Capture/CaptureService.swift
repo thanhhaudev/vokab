@@ -45,6 +45,9 @@ public enum CaptureError: Error, Equatable, Sendable {
 /// (SPEC §6, §9). agy/transport failures propagate so that no entry is written
 /// and no quota is charged (SPEC §10).
 public struct CaptureService: Sendable {
+    /// Paragraphs longer than this (in words) are split into sentence-aligned
+    /// chunks so agy doesn't summarize a wall of text (SPEC §7c).
+    static let paragraphChunkMaxWords = 120
     private let agy: AgyService
     private let entries: EntryRepository
     private let cache: CacheRepository
@@ -235,8 +238,8 @@ public struct CaptureService: Sendable {
         try await fetchParagraph(text: text, language: language, minLevel: minLevel, now: now)
     }
 
-    /// Shared cache→agy paragraph fetch. (Task 7 replaces the agy branch with
-    /// chunked extraction.)
+    /// Shared cache→agy paragraph fetch. Long text is split into sentence-aligned
+    /// chunks; quota is charged once per successful chunk (SPEC §7c, §10).
     private func fetchParagraph(text: String, language: String, minLevel: CEFR,
                                now: Date) async throws -> ParagraphFetch {
         if let cached = try cache.lookup(text: text, language: language, minLevel: minLevel),
@@ -245,11 +248,33 @@ public struct CaptureService: Sendable {
         }
         try checkQuota(now)
         let taxonomy = (try? categories.currentTaxonomy()) ?? []
-        let ex = try await agy.extractFromParagraph(text, minLevel: minLevel, taxonomy: taxonomy)
-        try quota.increment(on: now)
-        let json = (try? encode(ex)) ?? #"{"items":[]}"#
+        let chunks = ParagraphChunker.chunk(text, maxWords: Self.paragraphChunkMaxWords)
+
+        var merged: [ParagraphItem] = []
+        var translations: [String] = []
+        var failed = 0
+        for chunk in chunks {
+            do {
+                let ex = try await agy.extractFromParagraph(chunk, minLevel: minLevel, taxonomy: taxonomy)
+                try quota.increment(on: now)                 // charge only on success (SPEC §10)
+                merged = ParagraphMerge.union(merged, ex.items)
+                if let t = ex.translationVi?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty {
+                    translations.append(t)
+                }
+            } catch {
+                failed += 1                                  // not charged; partial failure
+            }
+        }
+        // Every chunk failed → surface as a hard failure (no entry, no cache).
+        if failed == chunks.count && !chunks.isEmpty {
+            throw AgyError.timeout
+        }
+        let extraction = ParagraphExtraction(
+            translationVi: translations.isEmpty ? nil : translations.joined(separator: " "),
+            items: merged)
+        let json = (try? encode(extraction)) ?? #"{"items":[]}"#
         try cache.upsert(text: text, language: language, minLevel: minLevel, aiResult: json, now: now)
-        return ParagraphFetch(items: ex.items, translationVi: ex.translationVi, failedChunks: 0)
+        return ParagraphFetch(items: merged, translationVi: extraction.translationVi, failedChunks: failed)
     }
 
     // MARK: - Quota

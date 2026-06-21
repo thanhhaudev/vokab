@@ -229,6 +229,31 @@ public struct ParagraphItem: Codable, Sendable, Equatable {
     }
 }
 
+/// Result of a paragraph extraction: a learner-language translation of the whole
+/// passage plus the candidate vocabulary items (SPEC §7c, paragraph fixes).
+/// Decoded leniently from agy (snake_case `translation_vi`) and from our own
+/// cache (camelCase `translationVi`); encode is default-synthesized.
+public struct ParagraphExtraction: Codable, Sendable, Equatable {
+    public var translationVi: String?
+    public var items: [ParagraphItem]
+
+    public init(translationVi: String?, items: [ParagraphItem]) {
+        self.translationVi = translationVi
+        self.items = items
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: GenericKey.self)
+        translationVi = decodeString(c, "translationVi") ?? decodeString(c, "translation_vi")
+        if let k = GenericKey(stringValue: "items"),
+           let arr = try? c.decode([ParagraphItem].self, forKey: k) {
+            items = arr
+        } else {
+            items = []
+        }
+    }
+}
+
 /// One token in a production-feedback diff (SPEC §7d). `type` is keep|del|ins.
 public struct DiffToken: Codable, Sendable, Equatable {
     public var type: String

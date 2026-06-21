@@ -115,8 +115,7 @@ private struct QuickCaptureView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Text("V").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.accentBg)
-                    .frame(width: 24, height: 24).background(Theme.accent, in: RoundedRectangle(cornerRadius: 6))
+                BrandBadge(size: 24, corner: 6)
                 Text(L.t("Quick Capture", "Quick Capture")).font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Theme.textSecondary)
                 Spacer()

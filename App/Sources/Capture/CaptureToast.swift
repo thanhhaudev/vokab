@@ -48,10 +48,7 @@ struct CaptureToastView: View {
     }
 
     private var appIcon: some View {
-        Text("V")
-            .font(.system(size: 20, weight: .medium)).foregroundStyle(Theme.accentBg)
-            .frame(width: 38, height: 38)
-            .background(Theme.accent, in: RoundedRectangle(cornerRadius: 9))
+        BrandBadge(size: 38, corner: 9)
     }
 
     @ViewBuilder private var content: some View {

@@ -26,9 +26,11 @@ struct ParagraphExtractionView: View {
     @State private var savedSet: Set<String> = []           // normalized words already in library
     @State private var working = false
     @State private var errorText: String?
+    @State private var warningText: String?
     @State private var translationExpanded = true
 
-    init(items: [ParagraphItem], translationVi: String? = nil, source: SourceContext, language: String,
+    init(items: [ParagraphItem], translationVi: String? = nil, failedChunks: Int = 0,
+         source: SourceContext, language: String,
          rawText: String, onClose: @escaping () -> Void) {
         _allItems = State(initialValue: items)
         _translationViState = State(initialValue: translationVi)
@@ -36,6 +38,10 @@ struct ParagraphExtractionView: View {
         // hasn't been fetched yet. Use .b1 as the default lowestFetched to match
         // the settings default — onAppear will sync both from env.settings.
         _lowestFetched = State(initialValue: .b1)
+        _warningText = State(initialValue: failedChunks > 0
+            ? L.t("\(failedChunks) section(s) couldn't be analyzed — showing the rest.",
+                  "\(failedChunks) đoạn không trích xuất được — đang hiển thị phần còn lại.")
+            : nil)
         self.source = source
         self.language = language
         self.rawText = rawText
@@ -68,6 +74,7 @@ struct ParagraphExtractionView: View {
             Hairline()
             filterBar
             if let errorText { errorBanner(errorText) }
+            if let warningText { warningBanner(warningText) }
             Hairline()
             listContent
             Hairline()
@@ -96,7 +103,7 @@ struct ParagraphExtractionView: View {
             }
             highlightedText.font(.system(size: 13)).lineSpacing(4)
 
-            if let tv = translationViState {
+            if let tv = translationViState, !tv.isEmpty {
                 translationBlock(tv)
             }
         }
@@ -186,6 +193,14 @@ struct ParagraphExtractionView: View {
             .background(Theme.bgDanger)
     }
 
+    private func warningBanner(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 12)).foregroundStyle(Theme.highlightText)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 8)
+            .background(Theme.highlightBg)
+    }
+
     private var loadingOverlay: some View {
         ZStack {
             Color.black.opacity(0.04)
@@ -205,13 +220,13 @@ struct ParagraphExtractionView: View {
         } else {
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(selectable, id: \.self) { item in
+                    ForEach(selectable, id: \.word) { item in
                         selectableRow(item)
                         Hairline()
                     }
                     if !saved.isEmpty {
                         savedSectionHeader(count: saved.count)
-                        ForEach(saved, id: \.self) { item in
+                        ForEach(saved, id: \.word) { item in
                             savedRow(item)
                             Hairline()
                         }
@@ -339,6 +354,7 @@ struct ParagraphExtractionView: View {
             // Lower below previously fetched: need agy call to get the extra words
             minLevel = lvl
             errorText = nil
+            warningText = nil
             working = true
             Task {
                 do {
@@ -361,6 +377,15 @@ struct ParagraphExtractionView: View {
                             return k
                         })
                         selected.formUnion(newKeys)
+                        // Drop any selection keys that didn't survive the merge
+                        let presentKeys = Set(allItems.compactMap { item -> String? in
+                            let k = TextKey.normalize(item.word ?? ""); return k.isEmpty ? nil : k
+                        })
+                        selected.formIntersection(presentKeys)
+                        if result.failedChunks > 0 {
+                            warningText = L.t("\(result.failedChunks) section(s) couldn't be analyzed — showing the rest.",
+                                             "\(result.failedChunks) đoạn không trích xuất được — đang hiển thị phần còn lại.")
+                        }
                         working = false
                     }
                 } catch {

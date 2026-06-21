@@ -358,6 +358,18 @@ final class CaptureServiceTests: XCTestCase {
         XCTAssertEqual(result.failedChunks, 0)
     }
 
+    func testAllChunksFailThrowsAndWritesNoCache() async throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let h = try makeHarness([.fail(.timeout), .fail(.timeout)])
+        do {
+            _ = try await h.service.capture(text: longText(), language: "en", source: source(now))
+            XCTFail("expected timeout when all chunks fail")
+        } catch AgyError.timeout {
+            XCTAssertEqual(try h.quota.count(on: now), 0)                       // nothing charged
+            XCTAssertNil(try h.cache.lookup(text: longText(), language: "en", minLevel: .b1))
+        }
+    }
+
     func testPartialChunkFailureKeepsSuccessesAndCountsFailure() async throws {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         // 1st chunk OK; 2nd chunk fails (timeout) — transport errors are NOT retried.

@@ -28,7 +28,7 @@ enum MenubarIcon {
             // Leave room at lower-right for the dot so the V doesn't overlap it.
             let vRect = NSRect(x: rect.minX, y: rect.minY + rect.height * 0.18,
                                width: rect.width * 0.82, height: rect.height * 0.82)
-            drawChevron(in: vRect, color: menubarForeground())
+            drawChevron(in: vRect, color: .labelColor)
             let d = rect.width * 0.34
             let dot = NSRect(x: rect.maxX - d, y: rect.minY, width: d, height: d)
             amber.setFill()
@@ -37,12 +37,6 @@ enum MenubarIcon {
         }
         image.isTemplate = false
         return image
-    }
-
-    /// Best-effort menubar foreground color for the current appearance.
-    private static func menubarForeground() -> NSColor {
-        let dark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        return dark ? .white : .black
     }
 
     /// Strokes the V chevron centered in `rect`, scaled from the SVG's 512 space.

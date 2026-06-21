@@ -24,8 +24,8 @@ public enum SentenceExtractor {
     }
 
     /// Splits on sentence terminators (Latin + CJK) and newlines, keeping each
-    /// terminator with its sentence.
-    private static func sentences(in source: String) -> [String] {
+    /// terminator with its sentence. Public so `ParagraphChunker` can reuse it.
+    public static func sentences(in source: String) -> [String] {
         let terminators: Set<Character> = [".", "!", "?", "…", "。", "！", "？", "\n"]
         var result: [String] = []
         var buffer = ""

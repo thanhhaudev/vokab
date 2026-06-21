@@ -25,16 +25,22 @@ public enum PromptTemplates {
         """
     }
 
-    /// Paragraph extraction (SPEC §7c) — each item gets a category.
+    /// Paragraph extraction (SPEC §7c) — returns a learner-language translation of
+    /// the whole passage plus an exhaustive list of worth-learning items, each with
+    /// a category.
     public static func paragraph(_ paragraph: String, minLevel: CEFR, taxonomy: [String]) -> String {
         """
-        Extract vocabulary worth learning from this paragraph (min CEFR \(minLevel.rawValue.uppercased())).
-        Filter out basic words (A1–A2). Return ONLY JSON array:
-        [{word, cefr, pos, meaning_vi, reason_to_learn, category}]
+        Analyze this text for a Vietnamese learner of English. Return ONLY JSON:
+        {"translation_vi": "<full Vietnamese translation of the whole text>",
+         "items": [{word, cefr, pos, meaning_vi, reason_to_learn, category}]}
+
+        For "items": list EVERY word or short phrase worth learning at CEFR \(minLevel.rawValue.uppercased()) or above.
+        Be exhaustive — do NOT cap the count, do NOT omit items, do NOT summarize.
+        Filter out only basic words (A1–A2 below the minimum).
         For each "category": prefer reusing one of [\(taxonomy.joined(separator: ", "))]; only invent a new one if none fits.
         Category MUST be human-readable Title Case (e.g. "Social media"), never snake_case or kebab-case.
 
-        Paragraph:
+        Text:
         \(paragraph)
 
         No preamble, no markdown fence.

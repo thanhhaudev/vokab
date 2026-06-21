@@ -108,4 +108,18 @@ final class PromptTemplateTests: XCTestCase {
         let c = PromptTemplates.classify("stubborn", language: "en", taxonomy: ["Technology"])
         XCTAssertTrue(c.contains("Title Case") || c.lowercased().contains("human-readable"))
     }
+
+    func testParagraphPromptDemandsObjectWithTranslation() {
+        let p = PromptTemplates.paragraph("Some text.", minLevel: .b1, taxonomy: ["Business"])
+        XCTAssertTrue(p.contains("translation_vi"))
+        XCTAssertTrue(p.contains("\"items\""))
+        XCTAssertTrue(p.contains("B1"))
+        XCTAssertTrue(p.contains("Business"))
+    }
+
+    func testParagraphPromptIsExhaustive() {
+        let p = PromptTemplates.paragraph("Some text.", minLevel: .a1, taxonomy: [])
+        XCTAssertTrue(p.lowercased().contains("every"))     // list EVERY word
+        XCTAssertTrue(p.lowercased().contains("do not"))    // do not cap / omit
+    }
 }

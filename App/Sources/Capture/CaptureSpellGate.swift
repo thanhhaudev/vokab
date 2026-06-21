@@ -12,7 +12,7 @@ struct CaptureSpellGate: View {
 
     private var typos: [SpellCheck.Issue] { issues.filter { $0.kind != .nonexistent } }
     private var nonexistent: [SpellCheck.Issue] { issues.filter { $0.kind == .nonexistent } }
-    private var hasFixable: Bool { issues.contains { $0.suggestion != nil } }
+    private var hasFixable: Bool { typos.contains { $0.suggestion != nil } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {

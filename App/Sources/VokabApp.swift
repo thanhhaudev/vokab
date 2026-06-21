@@ -21,7 +21,7 @@ struct VokabApp: App {
         MenuBarExtra {
             MenubarPopoverView().environmentObject(env)
         } label: {
-            Image(nsImage: MenubarIcon.idle())
+            Image(nsImage: env.activeAnalyses > 0 ? MenubarIcon.processing() : MenubarIcon.idle())
         }
         .menuBarExtraStyle(.window)
 

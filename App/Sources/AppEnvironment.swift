@@ -13,6 +13,7 @@ final class AppEnvironment: ObservableObject {
     /// production thresholds, meaning language. (Settings captured by services at
     /// init — agy model/path/timeout — still take effect on next launch.)
     @Published var settings: VokabSettings
+    @Published var activeAnalyses: Int = 0
     let dbQueue: DatabaseQueue
     let entries: EntryRepository
     let review: ReviewRepository
@@ -30,7 +31,7 @@ final class AppEnvironment: ObservableObject {
     let phraseErrorBackfiller: PhraseErrorBackfiller
     let translation: TranslationService
     let antigravityQuota: AntigravityQuotaService
-    let captureWorker: CaptureWorker
+    private(set) var captureWorker: CaptureWorker
     private var redQuotaGate = RedNotificationGate()
 
     init(queue: DatabaseQueue, settings: VokabSettings) {
@@ -63,6 +64,7 @@ final class AppEnvironment: ObservableObject {
         self.phraseErrorBackfiller = PhraseErrorBackfiller(agy: agy, entries: entries)
         self.translation = TranslationService(agy: agy, cache: cache)
         self.antigravityQuota = AntigravityQuotaService.live()
+        // Phase 1: initialize captureWorker without onActivity (self not yet fully initialized).
         self.captureWorker = CaptureWorker(
             capture: self.capture, maxConcurrent: settings.maxConcurrent,
             onChange: { Task { @MainActor in WindowManager.notifyDataChanged() } },
@@ -74,6 +76,22 @@ final class AppEnvironment: ObservableObject {
             },
             onComplete: { id, outcome in
                 Task { @MainActor in CaptureController.shared.entryCompleted(id, outcome) }
+            })
+        // Phase 2: self is now fully initialized; rebuild with onActivity wired in.
+        self.captureWorker = CaptureWorker(
+            capture: self.capture, maxConcurrent: settings.maxConcurrent,
+            onChange: { Task { @MainActor in WindowManager.notifyDataChanged() } },
+            onFailure: { entryId in
+                Task { @MainActor in
+                    let word = ((try? entries.entry(id: entryId)) ?? nil)?.rawText ?? ""
+                    NotificationManager.shared.postFailed(word: word, entryId: entryId)
+                }
+            },
+            onComplete: { id, outcome in
+                Task { @MainActor in CaptureController.shared.entryCompleted(id, outcome) }
+            },
+            onActivity: { [weak self] count in
+                Task { @MainActor in self?.activeAnalyses = count }
             })
     }
 

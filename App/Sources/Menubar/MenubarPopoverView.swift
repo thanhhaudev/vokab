@@ -13,8 +13,6 @@ struct MenubarPopoverView: View {
     @State private var streak = 0
     @State private var captureText = ""
     @FocusState private var captureFocused: Bool
-    @State private var flashWord: String?
-    @State private var flashTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -95,47 +93,33 @@ struct MenubarPopoverView: View {
     }
 
     private var captureField: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Optimistic flash: mirrors the corner toast's "analyzing" phase.
-            // The toast owns the real outcome (resolved / duplicate / error);
-            // this just confirms the submit while the popover is still open.
-            if let flashWord {
-                HStack(spacing: 5) {
-                    Image(systemName: "sparkles").font(.system(size: 10))
-                    Text(L.t("Analyzing \"\(flashWord)\"…", "Đang phân tích \"\(flashWord)\"…"))
-                        .font(.system(size: 11)).lineLimit(1)
-                }
-                .foregroundStyle(Theme.dueColor(.new))
-                .transition(.opacity)
-            }
-
-            HStack(spacing: 8) {
-                Image(systemName: "plus").font(.system(size: 13)).foregroundStyle(Theme.accent)
-                TextField(L.t("Capture a word…", "Bắt một từ…"), text: $captureText)
-                    .textFieldStyle(.plain).font(.system(size: 13))
-                    .focused($captureFocused)
-                    .onSubmit(runCapture)
-                // ⏎ hint: dimmed while empty so it only lights up when actionable.
-                Text("⏎").font(Theme.mono(11)).foregroundStyle(Theme.textTertiary)
+        HStack(spacing: 8) {
+            Image(systemName: "plus").font(.system(size: 13)).foregroundStyle(Theme.accent)
+            TextField(L.t("Enter a word or phrase…", "Nhập từ hoặc cụm từ…"), text: $captureText)
+                .textFieldStyle(.plain).font(.system(size: 13))
+                .focused($captureFocused)
+                .onSubmit(runCapture)
+            // Paste from clipboard (same affordance as the full capture form).
+            Button(action: pasteCapture) {
+                Image(systemName: "doc.on.clipboard").font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
                     .frame(width: 26, height: 20)
                     .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: 5))
                     .overlay(RoundedRectangle(cornerRadius: 5)
                         .strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
-                    .opacity(captureText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1)
             }
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(Theme.bgPrimary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.radiusMd)
-                    .strokeBorder(captureFocused ? Theme.accent : Theme.borderTertiary,
-                                  lineWidth: captureFocused ? 1 : Theme.hairline)
-            )
-            .shadow(color: captureFocused ? Theme.accent.opacity(0.18) : .clear, radius: 2.5)
-            .animation(.easeOut(duration: 0.15), value: captureFocused)
+            .buttonStyle(.plain).help(L.t("Paste from clipboard", "Dán từ clipboard"))
         }
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(Theme.bgPrimary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radiusMd)
+                .strokeBorder(captureFocused ? Theme.accent : Theme.borderTertiary,
+                              lineWidth: captureFocused ? 1 : Theme.hairline)
+        )
+        .shadow(color: captureFocused ? Theme.accent.opacity(0.18) : .clear, radius: 2.5)
+        .animation(.easeOut(duration: 0.15), value: captureFocused)
         .padding(.horizontal, 14).padding(.vertical, 9)
         .background(Theme.bgSecondary)
-        .animation(.easeOut(duration: 0.15), value: flashWord)
     }
 
     private func runCapture() {
@@ -145,14 +129,17 @@ struct MenubarPopoverView: View {
         CaptureController.shared.capture(text, source: SourceContext(appName: "Manual entry"))
         // The capture is async; CaptureController posts dataDidChange on success,
         // which reloads this popover (see .onReceive above). The corner toast owns
-        // the durable result — this inline flash is optimistic and short-lived.
-        flashWord = text
+        // the durable result (analyzing → resolved / duplicate / error).
         captureFocused = true                       // keep focus for rapid adds
-        flashTask?.cancel()
-        flashTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_200_000_000)   // ~1.2s
-            if !Task.isCancelled { flashWord = nil }
-        }
+    }
+
+    /// Replaces the field with the clipboard text and refocuses, so a copied
+    /// word/phrase lands ready to capture (same affordance as the full form).
+    private func pasteCapture() {
+        guard let s = NSPasteboard.general.string(forType: .string)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return }
+        captureText = s
+        captureFocused = true
     }
 
     private func reload() {

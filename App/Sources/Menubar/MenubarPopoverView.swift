@@ -13,6 +13,12 @@ struct MenubarPopoverView: View {
     @State private var streak = 0
     @State private var captureText = ""
     @FocusState private var captureFocused: Bool
+    @State private var spellIssues: [SpellCheck.Issue] = []
+    @State private var forceSubmit = false
+    /// Set right before a programmatic fix edit so the text `onChange` doesn't wipe chips.
+    @State private var suppressSpellReset = false
+    private var detectedLang: String { CaptureDetection.language(captureText) }
+    private var isParagraph: Bool { CaptureDetection.type(captureText) == .paragraphItem }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -43,6 +49,23 @@ struct MenubarPopoverView: View {
             footer
             Hairline()
             captureField
+            if !spellIssues.isEmpty {
+                CaptureSpellGate(
+                    issues: spellIssues,
+                    onFixAll: {
+                        suppressSpellReset = true
+                        captureText = SpellCheck.fixAll(captureText, issues: spellIssues); spellIssues = []
+                    },
+                    onFixOne: { issue in
+                        suppressSpellReset = true
+                        captureText = SpellCheck.fixAll(captureText, issues: [issue])
+                        spellIssues.removeAll { $0.id == issue.id }
+                    },
+                    onCaptureAnyway: { forceSubmit = true; runCapture() }
+                )
+                .padding(.horizontal, 14).padding(.bottom, 9)
+                .background(Theme.bgSecondary)
+            }
         }
         .frame(width: 300)
         .background(Theme.bgPrimary)
@@ -99,6 +122,10 @@ struct MenubarPopoverView: View {
                 .textFieldStyle(.plain).font(.system(size: 13))
                 .focused($captureFocused)
                 .onSubmit(runCapture)
+                .onChange(of: captureText) { _, _ in
+                    if suppressSpellReset { suppressSpellReset = false; return }
+                    spellIssues = []; forceSubmit = false
+                }
             // Paste from clipboard (same affordance as the full capture form).
             Button(action: pasteCapture) {
                 Image(systemName: "doc.on.clipboard").font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
@@ -125,12 +152,19 @@ struct MenubarPopoverView: View {
     private func runCapture() {
         let text = captureText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+        // Local spell/gibberish gate (word & phrase only). Paragraphs are word
+        // harvests full of proper nouns — checking them is just noise.
+        if !forceSubmit && !isParagraph {
+            let issues = SpellCheck.issues(in: text, language: detectedLang)
+            if !issues.isEmpty { spellIssues = issues; return }   // show gate, don't submit yet
+        }
         captureText = ""
         CaptureController.shared.capture(text, source: SourceContext(appName: "Manual entry"))
         // The capture is async; CaptureController posts dataDidChange on success,
         // which reloads this popover (see .onReceive above). The corner toast owns
         // the durable result (analyzing → resolved / duplicate / error).
         captureFocused = true                       // keep focus for rapid adds
+        spellIssues = []; forceSubmit = false
     }
 
     /// Replaces the field with the clipboard text and refocuses, so a copied

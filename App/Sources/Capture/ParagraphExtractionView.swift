@@ -28,6 +28,12 @@ struct ParagraphExtractionView: View {
     @State private var errorText: String?
     @State private var warningText: String?
     @State private var translationExpanded = true
+    @State private var translationHeight: CGFloat = 0   // measured; block caps at translationMaxHeight
+
+    /// Max height of the (default-expanded) translation block before it scrolls
+    /// internally, so a long paragraph's translation never pushes the word list
+    /// off-screen.
+    private let translationMaxHeight: CGFloat = 140
 
     init(items: [ParagraphItem], translationVi: String? = nil, failedChunks: Int = 0,
          source: SourceContext, language: String,
@@ -147,11 +153,19 @@ struct ParagraphExtractionView: View {
             .buttonStyle(.plain)
 
             if translationExpanded {
-                Text(text)
-                    .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                    .lineSpacing(3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                ScrollView {
+                    Text(text)
+                        .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)   // wrap, don't truncate
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(GeometryReader { g in
+                            Color.clear.preference(key: TranslationHeightKey.self, value: g.size.height)
+                        })
+                }
+                .frame(height: min(translationHeight, translationMaxHeight))
+                .onPreferenceChange(TranslationHeightKey.self) { translationHeight = $0 }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(.top, 8)
@@ -315,7 +329,7 @@ struct ParagraphExtractionView: View {
                 })
             }
             .buttonStyle(.vSecondary)
-            Button(L.t("Save \(selected.count) to library", "Lưu \(selected.count) vào thư viện")) { addSelected() }
+            Button(L.t("Save \(selected.count) words", "Lưu \(selected.count) từ")) { addSelected() }
                 .buttonStyle(.vPrimary).disabled(selected.isEmpty)
         }
         .padding(14).background(Theme.bgSecondary)
@@ -413,5 +427,14 @@ struct ParagraphExtractionView: View {
         onClose()
         // Background prep so each detail is ready when opened (bounded concurrency).
         Task { await env.prefetcher.prefetch(ids: ids) }
+    }
+}
+
+/// Measures the natural (unclamped) height of the translation text so the
+/// surrounding block can size to content up to a cap, then scroll.
+private struct TranslationHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

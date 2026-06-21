@@ -28,7 +28,7 @@ enum MenubarIcon {
             // Leave room at lower-right for the dot so the V doesn't overlap it.
             let vRect = NSRect(x: rect.minX, y: rect.minY + rect.height * 0.18,
                                width: rect.width * 0.82, height: rect.height * 0.82)
-            drawChevron(in: vRect, color: .labelColor)
+            drawChevron(in: vRect, color: systemMenubarForeground())
             let d = rect.width * 0.34
             let dot = NSRect(x: rect.maxX - d, y: rect.minY, width: d, height: d)
             amber.setFill()
@@ -37,6 +37,15 @@ enum MenubarIcon {
         }
         image.isTemplate = false
         return image
+    }
+
+    /// The menu bar's foreground color. We can't use NSApp.effectiveAppearance or
+    /// a dynamic color (NSColor.labelColor): the app forces NSApp.appearance = .aqua,
+    /// so both would always resolve to the light-mode (black) value. Read the system
+    /// Dark Mode setting directly instead, which the forced app appearance does not affect.
+    private static func systemMenubarForeground() -> NSColor {
+        let dark = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
+        return dark ? .white : .black
     }
 
     /// Strokes the V chevron centered in `rect`, scaled from the SVG's 512 space.

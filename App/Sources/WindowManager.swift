@@ -97,9 +97,11 @@ final class WindowManager: NSObject, NSWindowDelegate {
         }
     }
 
-    func showExtraction(items: [ParagraphItem], source: SourceContext, language: String, rawText: String) {
+    func showExtraction(items: [ParagraphItem], translationVi: String? = nil, source: SourceContext, language: String, rawText: String, failedChunks: Int = 0) {
         guard let env else { return }
-        let root = ParagraphExtractionView(items: items, source: source, language: language,
+        let root = ParagraphExtractionView(items: items, translationVi: translationVi,
+                                           failedChunks: failedChunks,
+                                           source: source, language: language,
                                            rawText: rawText,
                                            onClose: { [weak self] in self?.extraction?.close() })
             .environmentObject(env)

@@ -10,12 +10,14 @@ final class ParagraphSelectionTests: XCTestCase {
         let items = [item("Exacerbate"), item("placate"), item("skepticism")]
         let existing: Set<String> = [TextKey.normalize("skepticism")]
         let sel = ParagraphSelection.defaultSelection(items: items, existingNormalized: existing)
-        XCTAssertEqual(sel, [0, 1])             // skepticism (index 2) already saved → excluded
+        // Returns word keys, not indices: "skepticism" already saved → excluded
+        XCTAssertEqual(sel, [TextKey.normalize("Exacerbate"), TextKey.normalize("placate")])
     }
 
     func testAllNewSelectsAll() {
         let items = [item("a"), item("b")]
-        XCTAssertEqual(ParagraphSelection.defaultSelection(items: items, existingNormalized: []), [0, 1])
+        let sel = ParagraphSelection.defaultSelection(items: items, existingNormalized: [])
+        XCTAssertEqual(sel, [TextKey.normalize("a"), TextKey.normalize("b")])
     }
 
     func testEmptyWordNotSelected() {

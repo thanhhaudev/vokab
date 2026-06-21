@@ -166,4 +166,24 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertNil(card.contextOfUse)
         XCTAssertNil(card.grammarNote)
     }
+
+    func testParagraphExtractionDecodesObjectShape() throws {
+        let json = #"{"translation_vi":"Dù gặp trở ngại...","items":[{"word":"resilient","cefr":"B2"}]}"#
+        let ex = try JSONCleaning.decode(ParagraphExtraction.self, from: json)
+        XCTAssertEqual(ex.translationVi, "Dù gặp trở ngại...")
+        XCTAssertEqual(ex.items.map { $0.word }, ["resilient"])
+    }
+
+    func testParagraphExtractionToleratesMissingTranslation() throws {
+        let ex = try JSONCleaning.decode(ParagraphExtraction.self, from: #"{"items":[{"word":"x"}]}"#)
+        XCTAssertNil(ex.translationVi)
+        XCTAssertEqual(ex.items.count, 1)
+    }
+
+    func testParagraphExtractionRoundTripsThroughCamelCase() throws {
+        // What CaptureService caches is re-decoded later; the camelCase key must work too.
+        let original = #"{"translationVi":"x","items":[{"word":"y"}]}"#
+        let ex = try JSONCleaning.decode(ParagraphExtraction.self, from: original)
+        XCTAssertEqual(ex.translationVi, "x")
+    }
 }

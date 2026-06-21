@@ -210,7 +210,7 @@ public struct PhraseCard: Codable, Sendable, Equatable {
 }
 
 /// One vocabulary item extracted from a paragraph (SPEC §7c).
-public struct ParagraphItem: Codable, Sendable, Equatable {
+public struct ParagraphItem: Codable, Sendable, Equatable, Hashable {
     public var word: String?
     public var cefr: String?
     public var pos: String?
@@ -226,6 +226,31 @@ public struct ParagraphItem: Codable, Sendable, Equatable {
         meaningVi = decodeString(c, "meaningVi")
         reasonToLearn = decodeString(c, "reasonToLearn")
         category = decodeString(c, "category")
+    }
+}
+
+/// Result of a paragraph extraction: a learner-language translation of the whole
+/// passage plus the candidate vocabulary items (SPEC §7c, paragraph fixes).
+/// Decoded leniently from agy (snake_case `translation_vi`) and from our own
+/// cache (camelCase `translationVi`); encode is default-synthesized.
+public struct ParagraphExtraction: Codable, Sendable, Equatable {
+    public var translationVi: String?
+    public var items: [ParagraphItem]
+
+    public init(translationVi: String?, items: [ParagraphItem]) {
+        self.translationVi = translationVi
+        self.items = items
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: GenericKey.self)
+        translationVi = decodeString(c, "translationVi") ?? decodeString(c, "translation_vi")
+        if let k = GenericKey(stringValue: "items"),
+           let arr = try? c.decode([ParagraphItem].self, forKey: k) {
+            items = arr
+        } else {
+            items = []
+        }
     }
 }
 

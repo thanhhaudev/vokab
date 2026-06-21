@@ -18,6 +18,22 @@ public struct CaptureResult: Sendable, Equatable {
     public let paragraphItems: [ParagraphItem]
     public let wasDuplicate: Bool
     public let fromCache: Bool
+    /// Set for paragraph captures: full learner-language translation of the passage.
+    public let translationVi: String?
+    /// Set for paragraph captures: count of chunks that failed (0 = none / not chunked).
+    public let failedChunks: Int
+}
+
+/// Result of a paragraph extraction fetch at one CEFR level (the screen merges
+/// these as the user lowers the Min-level filter). `failedChunks` > 0 means some
+/// chunks of a long passage failed but the rest succeeded (SPEC §7c).
+public struct ParagraphFetch: Sendable, Equatable {
+    public let items: [ParagraphItem]
+    public let translationVi: String?
+    public let failedChunks: Int
+    public init(items: [ParagraphItem], translationVi: String?, failedChunks: Int) {
+        self.items = items; self.translationVi = translationVi; self.failedChunks = failedChunks
+    }
 }
 
 public enum CaptureError: Error, Equatable, Sendable {
@@ -29,6 +45,9 @@ public enum CaptureError: Error, Equatable, Sendable {
 /// (SPEC §6, §9). agy/transport failures propagate so that no entry is written
 /// and no quota is charged (SPEC §10).
 public struct CaptureService: Sendable {
+    /// Paragraphs longer than this (in words) are split into sentence-aligned
+    /// chunks so agy doesn't summarize a wall of text (SPEC §7c).
+    static let paragraphChunkMaxWords = 120
     private let agy: AgyService
     private let entries: EntryRepository
     private let cache: CacheRepository
@@ -130,6 +149,18 @@ public struct CaptureService: Sendable {
     @discardableResult
     public func persistParagraphItem(_ item: ParagraphItem, language: String,
                                      source: SourceContext, sourceText: String? = nil) throws -> Int64 {
+        let word = item.word ?? ""
+        let sentence = sourceText.flatMap {
+            SentenceExtractor.extractSentence(containing: word, from: $0)
+        }
+        // Dedupe guard (SPEC §11): if this word already exists, don't insert a
+        // duplicate — backfill any missing capture context and return its id.
+        if let existing = try entries.find(rawText: word, language: language), let id = existing.id {
+            try entries.backfillCaptureContextIfMissing(
+                id: id, captureSentence: sentence,
+                sourceApp: source.appName, sourceURL: source.url)
+            return id
+        }
         // Build a partial WordCard JSON (snake_case keys, decoded leniently later).
         var fields: [String: String] = [:]
         if let p = item.pos { fields["pos"] = p }
@@ -138,10 +169,7 @@ public struct CaptureService: Sendable {
         if let cat = item.category { fields["category"] = cat }
         let json = (try? encode(fields)) ?? "{}"
         let category = try categories.canonicalize(item.category)
-        let sentence = sourceText.flatMap {
-            SentenceExtractor.extractSentence(containing: item.word ?? "", from: $0)
-        }
-        let entry = Entry(rawText: item.word ?? "",
+        let entry = Entry(rawText: word,
                           type: CardType.word.rawValue,
                           language: language,
                           sourceApp: source.appName,
@@ -160,7 +188,8 @@ public struct CaptureService: Sendable {
                                source: SourceContext, now: Date) async throws -> CaptureResult {
         if let existing = try entries.find(rawText: text, language: language) {
             return CaptureResult(type: existing.cardType ?? type, entryId: existing.id,
-                                 paragraphItems: [], wasDuplicate: true, fromCache: false)
+                                 paragraphItems: [], wasDuplicate: true, fromCache: false,
+                                 translationVi: nil, failedChunks: 0)
         }
 
         if let cached = try cache.lookup(text: text, language: language) {
@@ -170,7 +199,8 @@ public struct CaptureService: Sendable {
                                       json: cached.aiResult, cefr: meta.cefr, frequency: meta.frequency,
                                       category: category, source: source, now: now)
             return CaptureResult(type: type, entryId: id, paragraphItems: [],
-                                 wasDuplicate: false, fromCache: true)
+                                 wasDuplicate: false, fromCache: true,
+                                 translationVi: nil, failedChunks: 0)
         }
 
         try checkQuota(now)
@@ -196,45 +226,64 @@ public struct CaptureService: Sendable {
                                   json: json, cefr: cefr, frequency: frequency,
                                   category: category, source: source, now: now)
         return CaptureResult(type: type, entryId: id, paragraphItems: [],
-                             wasDuplicate: false, fromCache: false)
+                             wasDuplicate: false, fromCache: false,
+                             translationVi: nil, failedChunks: 0)
     }
 
     // MARK: - Paragraph
 
     private func captureParagraph(text: String, language: String, minLevel: CEFR, now: Date) async throws -> CaptureResult {
-        if let cached = try cache.lookup(text: text, language: language, minLevel: minLevel),
-           let items = try? JSONCleaning.decode([ParagraphItem].self, from: cached.aiResult) {
-            return CaptureResult(type: .paragraphItem, entryId: nil, paragraphItems: items,
-                                 wasDuplicate: false, fromCache: true)
-        }
-
-        try checkQuota(now)
-        let taxonomy = (try? categories.currentTaxonomy()) ?? []
-        let items = try await agy.extractFromParagraph(text, minLevel: minLevel, taxonomy: taxonomy)
-        try quota.increment(on: now)
-        let json = (try? encode(items)) ?? "[]"
-        try cache.upsert(text: text, language: language, minLevel: minLevel, aiResult: json, now: now)
-        return CaptureResult(type: .paragraphItem, entryId: nil, paragraphItems: items,
-                             wasDuplicate: false, fromCache: false)
+        let fetch = try await fetchParagraph(text: text, language: language, minLevel: minLevel, now: now)
+        return CaptureResult(type: .paragraphItem, entryId: nil, paragraphItems: fetch.items,
+                             wasDuplicate: false, fromCache: false,
+                             translationVi: fetch.translationVi, failedChunks: fetch.failedChunks)
     }
 
-    /// Re-runs paragraph extraction at a chosen minimum CEFR level (the extraction
-    /// window's "Min level" control). Caches per (text, language, level) and
-    /// charges quota only on a real agy call. Persists nothing — words are saved
-    /// only via `persistParagraphItem` on "Add to deck".
+    /// Re-runs paragraph extraction at a chosen minimum CEFR level. Caches per
+    /// (text, language, level); charges quota only on a real agy call. Persists
+    /// nothing — words are saved only via `persistParagraphItem`.
     public func reextractParagraph(text: String, language: String, minLevel: CEFR,
-                                   now: Date = Date()) async throws -> [ParagraphItem] {
+                                   now: Date = Date()) async throws -> ParagraphFetch {
+        try await fetchParagraph(text: text, language: language, minLevel: minLevel, now: now)
+    }
+
+    /// Shared cache→agy paragraph fetch. Long text is split into sentence-aligned
+    /// chunks; quota is charged once per successful chunk (SPEC §7c, §10).
+    private func fetchParagraph(text: String, language: String, minLevel: CEFR,
+                               now: Date) async throws -> ParagraphFetch {
         if let cached = try cache.lookup(text: text, language: language, minLevel: minLevel),
-           let items = try? JSONCleaning.decode([ParagraphItem].self, from: cached.aiResult) {
-            return items
+           let ex = try? JSONCleaning.decode(ParagraphExtraction.self, from: cached.aiResult) {
+            return ParagraphFetch(items: ex.items, translationVi: ex.translationVi, failedChunks: 0)
         }
         try checkQuota(now)
         let taxonomy = (try? categories.currentTaxonomy()) ?? []
-        let items = try await agy.extractFromParagraph(text, minLevel: minLevel, taxonomy: taxonomy)
-        try quota.increment(on: now)
-        let json = (try? encode(items)) ?? "[]"
+        let chunks = ParagraphChunker.chunk(text, maxWords: Self.paragraphChunkMaxWords)
+
+        var merged: [ParagraphItem] = []
+        var translations: [String] = []
+        var failed = 0
+        for chunk in chunks {
+            do {
+                let ex = try await agy.extractFromParagraph(chunk, minLevel: minLevel, taxonomy: taxonomy)
+                try quota.increment(on: now)                 // charge only on success (SPEC §10)
+                merged = ParagraphMerge.union(merged, ex.items)
+                if let t = ex.translationVi?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty {
+                    translations.append(t)
+                }
+            } catch {
+                failed += 1                                  // not charged; partial failure
+            }
+        }
+        // Every chunk failed → surface as a hard failure (no entry, no cache).
+        if failed == chunks.count && !chunks.isEmpty {
+            throw AgyError.timeout
+        }
+        let extraction = ParagraphExtraction(
+            translationVi: translations.isEmpty ? nil : translations.joined(separator: " "),
+            items: merged)
+        let json = (try? encode(extraction)) ?? #"{"items":[]}"#
         try cache.upsert(text: text, language: language, minLevel: minLevel, aiResult: json, now: now)
-        return items
+        return ParagraphFetch(items: merged, translationVi: extraction.translationVi, failedChunks: failed)
     }
 
     // MARK: - Quota

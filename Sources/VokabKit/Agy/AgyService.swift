@@ -88,12 +88,12 @@ public struct AgyService: Sendable {
                                 model: settings.enrichModel)
     }
 
-    public func extractFromParagraph(_ paragraph: String, taxonomy: [String]) async throws -> [ParagraphItem] {
+    public func extractFromParagraph(_ paragraph: String, taxonomy: [String]) async throws -> ParagraphExtraction {
         try await extractFromParagraph(paragraph, minLevel: settings.minParagraphLevel, taxonomy: taxonomy)
     }
 
-    public func extractFromParagraph(_ paragraph: String, minLevel: CEFR, taxonomy: [String]) async throws -> [ParagraphItem] {
-        try await callAndDecode([ParagraphItem].self,
+    public func extractFromParagraph(_ paragraph: String, minLevel: CEFR, taxonomy: [String]) async throws -> ParagraphExtraction {
+        try await callAndDecode(ParagraphExtraction.self,
                                 prompt: PromptTemplates.paragraph(paragraph, minLevel: minLevel, taxonomy: taxonomy))
     }
 

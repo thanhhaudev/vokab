@@ -86,11 +86,12 @@ final class AgyServiceTests: XCTestCase {
         XCTAssertEqual(card.formulaPattern, "kick the bucket")
     }
 
-    func testExtractFromParagraphDecodesArray() async throws {
-        let runner = MockAgyRunner(response: #"[{"word":"a","cefr":"B2"},{"word":"b","cefr":"C1"}]"#)
-        let items = try await service(runner).extractFromParagraph("some text", taxonomy: [])
-        XCTAssertEqual(items.count, 2)
-        XCTAssertEqual(items[1].word, "b")
+    func testExtractFromParagraphDecodesObject() async throws {
+        let runner = MockAgyRunner(response: #"{"translation_vi":"Văn bản.","items":[{"word":"a","cefr":"B2"},{"word":"b","cefr":"C1"}]}"#)
+        let extraction = try await service(runner).extractFromParagraph("some text", taxonomy: [])
+        XCTAssertEqual(extraction.items.count, 2)
+        XCTAssertEqual(extraction.items[1].word, "b")
+        XCTAssertEqual(extraction.translationVi, "Văn bản.")
     }
 
     func testJudgeProductionDecodes() async throws {

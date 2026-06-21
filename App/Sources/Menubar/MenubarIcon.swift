@@ -1,51 +1,46 @@
 import AppKit
+import SwiftUI
 
 /// The brand "V" chevron rendered for the menubar.
 ///
 /// Geometry mirrors `App/Resources/AppIcon.svg`: the path `M 182 166 L 256 256
-/// L 330 166` (round cap/join) in a 512×512 space. `idle()` is a template image
-/// so the system tints it for the light/dark menubar; `processing()` (Task 5)
-/// adds the amber activity dot and is therefore non-template.
+/// L 330 166` (round cap/join) in a 512×512 space. `idle()` is the single source
+/// of the glyph — a template image so the system tints it for the light/dark
+/// menubar. The processing state adds an amber activity dot *beside* the V as a
+/// SwiftUI `Circle` in the menubar label (see `VokabApp`), so the V never has to
+/// carry color and stays a properly-tinted template at a fixed size.
 enum MenubarIcon {
     /// Logical menubar icon height in points; the system scales for Retina.
     private static let size = NSSize(width: 18, height: 18)
 
+    /// Target box width for the V glyph inside the 18pt-wide image. Narrower than
+    /// the full image for a lighter, more native weight (the V is the dominant,
+    /// width-bound dimension of the chevron).
+    private static let glyphWidth: CGFloat = 17
+
+    /// Diameter (pt) of the amber activity dot shown beside the V while analyzing.
+    static let dotDiameter: CGFloat = 6
+    /// Spacing (pt) between the V and the activity dot.
+    static let dotGap: CGFloat = 2
+    /// Amber activity dot color (#EF9F27, sRGB).
+    static let activityDotColor = Color(red: 0xEF / 255.0, green: 0x9F / 255.0, blue: 0x27 / 255.0)
+
     /// Template V — system-tinted (black/white/accent) to match the menubar.
+    /// Used in BOTH idle and processing states so the glyph size never changes.
     static func idle() -> NSImage {
         let image = NSImage(size: size, flipped: false) { rect in
-            drawChevron(in: rect, color: .black)
+            drawChevron(in: glyphRect(in: rect), color: .black)
             return true
         }
         image.isTemplate = true
         return image
     }
 
-    /// V + amber activity dot. Non-template (it carries color), so the V is
-    /// stroked in the menubar's current text color to stay visible in light/dark.
-    static func processing() -> NSImage {
-        let amber = NSColor(srgbRed: 0xEF / 255.0, green: 0x9F / 255.0, blue: 0x27 / 255.0, alpha: 1)
-        let image = NSImage(size: size, flipped: false) { rect in
-            // Leave room at lower-right for the dot so the V doesn't overlap it.
-            let vRect = NSRect(x: rect.minX, y: rect.minY + rect.height * 0.18,
-                               width: rect.width * 0.82, height: rect.height * 0.82)
-            drawChevron(in: vRect, color: systemMenubarForeground())
-            let d = rect.width * 0.34
-            let dot = NSRect(x: rect.maxX - d, y: rect.minY, width: d, height: d)
-            amber.setFill()
-            NSBezierPath(ovalIn: dot).fill()
-            return true
-        }
-        image.isTemplate = false
-        return image
-    }
-
-    /// The menu bar's foreground color. We can't use NSApp.effectiveAppearance or
-    /// a dynamic color (NSColor.labelColor): the app forces NSApp.appearance = .aqua,
-    /// so both would always resolve to the light-mode (black) value. Read the system
-    /// Dark Mode setting directly instead, which the forced app appearance does not affect.
-    private static func systemMenubarForeground() -> NSColor {
-        let dark = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
-        return dark ? .white : .black
+    /// Centered sub-rect sizing the V to a native ~15pt-wide weight. The image
+    /// stays 18pt tall for correct menubar metrics; only the drawn glyph narrows.
+    private static func glyphRect(in rect: NSRect) -> NSRect {
+        let dx = max(0, (rect.width - glyphWidth) / 2)
+        return rect.insetBy(dx: dx, dy: 0)
     }
 
     /// Strokes the V chevron centered in `rect`, scaled from the SVG's 512 space.

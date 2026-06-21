@@ -21,7 +21,14 @@ struct VokabApp: App {
         MenuBarExtra {
             MenubarPopoverView().environmentObject(env)
         } label: {
-            Image(nsImage: env.activeAnalyses > 0 ? MenubarIcon.processing() : MenubarIcon.idle())
+            HStack(spacing: MenubarIcon.dotGap) {
+                Image(nsImage: MenubarIcon.idle())
+                if env.activeAnalyses > 0 {
+                    Circle()
+                        .fill(MenubarIcon.activityDotColor)
+                        .frame(width: MenubarIcon.dotDiameter, height: MenubarIcon.dotDiameter)
+                }
+            }
         }
         .menuBarExtraStyle(.window)
 

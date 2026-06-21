@@ -12,8 +12,9 @@ SCHEME   := vokab
 CONFIG   := Debug
 DERIVED  := build
 APP      := $(DERIVED)/Build/Products/$(CONFIG)/vokab.app
+INSTALLED := /Applications/vokab.app
 
-.PHONY: all run build open kill restart generate test clean help
+.PHONY: all run build open kill restart generate test clean help install
 
 all: build
 
@@ -29,6 +30,18 @@ build:
 
 ## run: build, then quit any running instance and relaunch
 run: build restart
+
+## install: build, copy into /Applications, and relaunch from there
+##   Quick Capture's synthetic-⌘C auto-grab needs Accessibility, which macOS
+##   ties to the binary's identity+location. Always run the /Applications copy
+##   — the DerivedData build is a different (untrusted) binary, so auto-grab
+##   silently fails there. After a rebuild changes the code hash you must
+##   re-grant: System Settings → Privacy & Security → Accessibility.
+install: build kill
+	rm -rf "$(INSTALLED)"
+	cp -R "$(APP)" "$(INSTALLED)"
+	@echo "Installed to $(INSTALLED)"
+	open "$(INSTALLED)"
 
 ## restart: quit the running app and launch the latest build (no rebuild)
 restart: kill open

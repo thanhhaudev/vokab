@@ -210,7 +210,7 @@ public struct PhraseCard: Codable, Sendable, Equatable {
 }
 
 /// One vocabulary item extracted from a paragraph (SPEC §7c).
-public struct ParagraphItem: Codable, Sendable, Equatable {
+public struct ParagraphItem: Codable, Sendable, Equatable, Hashable {
     public var word: String?
     public var cefr: String?
     public var pos: String?

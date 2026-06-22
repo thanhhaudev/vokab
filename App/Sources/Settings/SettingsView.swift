@@ -69,6 +69,20 @@ struct SettingsView: View {
 
     private var general: some View {
         VStack(alignment: .leading, spacing: 16) {
+            group(L.t("Appearance", "Giao diện")) {
+                SettingsRow(L.t("Theme", "Chủ đề"),
+                            sub: L.t("System follows macOS", "Hệ thống theo macOS")) {
+                    Picker("", selection: Binding(
+                        get: { settings.appearanceMode },
+                        set: { settings.appearanceMode = $0; persist(); AppearanceController.apply($0) }
+                    )) {
+                        Text(L.t("System", "Hệ thống")).tag(AppearanceMode.system)
+                        Text(L.t("Light", "Sáng")).tag(AppearanceMode.light)
+                        Text(L.t("Dark", "Tối")).tag(AppearanceMode.dark)
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+            }
             group(L.t("Startup", "Khởi động")) {
                 SettingsRow(L.t("Launch at login", "Mở khi đăng nhập")) {
                     Toggle("", isOn: Binding(

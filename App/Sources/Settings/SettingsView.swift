@@ -424,7 +424,8 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             SecLabel(title)
             VStack(spacing: 0) { content() }
-                .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
+                .background(Theme.bgSecondary)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.radiusMd))
                 .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
         }
     }

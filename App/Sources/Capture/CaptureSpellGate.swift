@@ -5,6 +5,7 @@ import VokabKit
 /// "no suggestion" items), plus a distinct red banner for words that don't look
 /// real. Never blocks — `onCaptureAnyway` always lets the user proceed.
 struct CaptureSpellGate: View {
+    @Environment(\.displayScale) private var displayScale
     let issues: [SpellCheck.Issue]
     let onFixAll: () -> Void
     let onFixOne: (SpellCheck.Issue) -> Void
@@ -50,7 +51,7 @@ struct CaptureSpellGate: View {
                         .font(.system(size: 11))
                         .padding(.horizontal, 7).padding(.vertical, 3)
                         .background(Theme.bgPrimary, in: Capsule())
-                        .overlay(Capsule().strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
+                        .overlay(Capsule().strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline(displayScale)))
                     }
                     .buttonStyle(.plain)
                     .disabled(issue.suggestion == nil)
@@ -80,7 +81,7 @@ struct CaptureSpellGate: View {
                         .font(.system(size: 11)).foregroundStyle(.red)
                         .padding(.horizontal, 7).padding(.vertical, 3)
                         .background(Color.red.opacity(0.08), in: Capsule())
-                        .overlay(Capsule().strokeBorder(Color.red.opacity(0.4), lineWidth: Theme.hairline))
+                        .overlay(Capsule().strokeBorder(Color.red.opacity(0.4), lineWidth: Theme.hairline(displayScale)))
                 }
             }
             Text(L.t("Analyzing it still spends an agy call / quota.",

@@ -4,6 +4,7 @@ import VokabKit
 /// Error-correction card — tap the correct option to fix the blank, reveal,
 /// self-grade (SM-2). Phrase-only; one quiz per card.
 struct ErrorCardView: View {
+    @Environment(\.displayScale) private var displayScale
     let env: AppEnvironment
     let card: ReviewCard
     let quiz: ErrorQuiz
@@ -96,7 +97,7 @@ struct ErrorCardView: View {
                     Text(opt).font(.system(size: 15)).foregroundStyle(Theme.textPrimary)
                         .padding(.horizontal, 12).padding(.vertical, 6)
                         .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline(displayScale)))
                 }
                 .buttonStyle(.plain)
             }

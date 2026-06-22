@@ -32,6 +32,7 @@ final class ToastModel: ObservableObject {
 
 /// The toast content, matching the mockup: app icon, status, word + pills.
 struct CaptureToastView: View {
+    @Environment(\.displayScale) private var displayScale
     @ObservedObject var model: ToastModel
 
     var body: some View {
@@ -44,7 +45,7 @@ struct CaptureToastView: View {
         .padding(.horizontal, 14).padding(.vertical, 12)
         .frame(width: 344, alignment: .leading)
         .background(Theme.bgPrimary, in: RoundedRectangle(cornerRadius: Theme.radiusLg))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLg).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLg).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline(displayScale)))
     }
 
     private var appIcon: some View {
@@ -130,7 +131,7 @@ struct CaptureToastView: View {
                 .padding(.horizontal, 12).padding(.vertical, 5)
                 .background(primary ? Theme.accentBg : Theme.bgPrimary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
                 .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd)
-                    .strokeBorder(primary ? .clear : Theme.borderSecondary, lineWidth: Theme.hairline))
+                    .strokeBorder(primary ? .clear : Theme.borderSecondary, lineWidth: Theme.hairline(displayScale)))
                 .foregroundStyle(primary ? Theme.accentText : Theme.textPrimary)
         }
         .buttonStyle(.plain)

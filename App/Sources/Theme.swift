@@ -73,7 +73,14 @@ enum Theme {
     static let radiusMd: CGFloat = 8
     static let radiusLg: CGFloat = 12
     static let radiusXl: CGFloat = 16
-    static let hairline: CGFloat = 0.5
+
+    /// Width of a hairline border/divider: exactly one physical device pixel.
+    /// A fixed 0.5pt rounds down to 0px on a scaled display whose backing scale
+    /// is 1 (resolution set below native), so the stroke renders incomplete —
+    /// the same bug fixed in `Hairline`. `1/displayScale` is always one device
+    /// pixel: crisp everywhere, identical to 0.5pt at @2x. Read `displayScale`
+    /// from the environment at the call site and pass it in.
+    static func hairline(_ scale: CGFloat) -> CGFloat { 1.0 / max(scale, 1) }
 
     // Fonts
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {

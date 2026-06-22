@@ -72,6 +72,7 @@ final class QuickCapture {
 }
 
 private struct QuickCaptureView: View {
+    @Environment(\.displayScale) private var displayScale
     let hotkeyLabel: String?
     let onSubmit: (String, String?, CardType?, CEFR?) -> Void
     let onBatch: ([String]) -> Void
@@ -123,7 +124,7 @@ private struct QuickCaptureView: View {
                     Text(hotkeyLabel).font(Theme.mono(11)).foregroundStyle(Theme.textTertiary)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: 5))
-                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
+                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline(displayScale)))
                         .help(L.t("Global hotkey to open Quick Capture (set in Settings)",
                                   "Phím tắt toàn cục mở Quick Capture (đặt trong Settings)"))
                 }

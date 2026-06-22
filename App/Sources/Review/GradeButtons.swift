@@ -6,6 +6,7 @@ import VokabKit
 /// ProductionCardView uses a different button shape (suggested-grade highlight)
 /// and is left with its own implementation.
 struct GradeButtons: View {
+    @Environment(\.displayScale) private var displayScale
     /// Interval preview in days, keyed by grade (nil = "<1 min" bucket).
     let preview: [ReviewGrade: Int]
     let onGrade: (ReviewGrade) -> Void
@@ -34,7 +35,7 @@ struct GradeButtons: View {
             .frame(maxWidth: .infinity).padding(.vertical, 9)
             .background(Theme.bgPrimary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
             .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd)
-                .strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline))
+                .strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline(displayScale)))
         }
         .buttonStyle(.plain)
     }

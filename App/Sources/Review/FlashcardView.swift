@@ -3,6 +3,7 @@ import VokabKit
 
 /// Recognition flashcard (SPEC §12 surface #5).
 struct FlashcardView: View {
+    @Environment(\.displayScale) private var displayScale
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var model: ReviewSessionViewModel
 
@@ -124,7 +125,7 @@ struct FlashcardView: View {
                     .font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
                     .padding(.horizontal, 10).padding(.vertical, 3)
                     .background(Theme.bgPrimary, in: Capsule())
-                    .overlay(Capsule().strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
+                    .overlay(Capsule().strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline(displayScale)))
                     .padding(.top, 14)
             }
             CategoryPill(current: card.entry.category) { picked in

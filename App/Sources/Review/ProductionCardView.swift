@@ -3,6 +3,7 @@ import VokabKit
 
 /// Production / writing card (SPEC §12 surface #6, §11).
 struct ProductionCardView: View {
+    @Environment(\.displayScale) private var displayScale
     let env: AppEnvironment
     let card: ReviewCard
     let onGrade: (ReviewGrade) -> Void
@@ -51,13 +52,13 @@ struct ProductionCardView: View {
                     .font(.system(size: 14)).scrollContentBackground(.hidden)
                     .frame(minHeight: 70).padding(8)
                     .background(Theme.bgPrimary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
-                    .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline(displayScale)))
             } else {
                 originalText
                     .font(.system(size: 14)).lineSpacing(3)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(10)
                     .background(Theme.bgPrimary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
-                    .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline(displayScale)))
             }
         }
     }
@@ -134,7 +135,7 @@ struct ProductionCardView: View {
                 .frame(maxWidth: .infinity).padding(.vertical, 7)
                 .background(suggested ? Theme.sugBg : Theme.bgPrimary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
                 .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd)
-                    .strokeBorder(suggested ? Theme.sugBorder : Theme.borderSecondary, lineWidth: suggested ? 1.5 : Theme.hairline))
+                    .strokeBorder(suggested ? Theme.sugBorder : Theme.borderSecondary, lineWidth: suggested ? 1.5 : Theme.hairline(displayScale)))
         }
         .buttonStyle(.plain)
     }

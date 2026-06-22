@@ -53,6 +53,7 @@ struct DetectedTypePill: View {
 
 /// Segmented override control (mockup `.seg`). Configurable choices.
 struct TypeOverrideSegmented: View {
+    @Environment(\.displayScale) private var displayScale
     let choices: [TypeChoice]
     @Binding var selection: TypeChoice
 
@@ -72,19 +73,20 @@ struct TypeOverrideSegmented: View {
                 if idx < choices.count - 1 {
                     // Explicit height: a width-only Rectangle is greedy vertically and
                     // would stretch the whole segmented (and its parent form) tall.
-                    Rectangle().fill(Theme.borderTertiary).frame(width: Theme.hairline, height: 18)
+                    Rectangle().fill(Theme.borderTertiary).frame(width: Theme.hairline(displayScale), height: 18)
                 }
             }
         }
         .fixedSize()   // size to content; never expand to fill the row/column
         .clipShape(RoundedRectangle(cornerRadius: 7))
-        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline))
+        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline(displayScale)))
     }
 }
 
 /// Language chip + dropdown (mockup "EN · auto ▾"). `selection == nil` = Auto
 /// (NLP detect); otherwise a forced BCP-47-ish code. `detected` is shown when Auto.
 struct LanguageMenu: View {
+    @Environment(\.displayScale) private var displayScale
     @Binding var selection: String?
     let detected: String
 
@@ -107,7 +109,7 @@ struct LanguageMenu: View {
             .foregroundStyle(Theme.textSecondary)
             .padding(.horizontal, 7).padding(.vertical, 2)
             .background(Theme.bgPrimary, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline(displayScale)))
         }
         .menuStyle(.borderlessButton).fixedSize()
     }

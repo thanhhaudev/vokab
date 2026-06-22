@@ -6,6 +6,7 @@ import VokabKit
 /// tier-2 fields (etymology, synonyms, antonyms, word family) are fetched lazily
 /// on first open and merged.
 struct WordDetailView: View {
+    @Environment(\.displayScale) private var displayScale
     @EnvironmentObject private var env: AppEnvironment
     @State private var current: Entry
     @State private var enriching = false
@@ -150,7 +151,7 @@ struct WordDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
 
-            Rectangle().fill(Theme.borderTertiary).frame(width: Theme.hairline)
+            Rectangle().fill(Theme.borderTertiary).frame(width: Theme.hairline(displayScale))
 
             VStack(alignment: .leading, spacing: 8) {
                 SecLabel("Word family")

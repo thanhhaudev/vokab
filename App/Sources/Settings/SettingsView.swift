@@ -5,6 +5,7 @@ import VokabKit
 /// designed; other tabs are placeholders per the SPEC. No API-key field — auth
 /// is managed by `agy login`.
 struct SettingsView: View {
+    @Environment(\.displayScale) private var displayScale
     @EnvironmentObject var env: AppEnvironment
     @State private var tab: SettingsTab = .aiEngine
     @State private var settings = VokabSettings()
@@ -443,10 +444,10 @@ struct SettingsView: View {
                 // overlaps the stroke border (darker top edge), so pull the
                 // content up by one hairline to clip that first line away —
                 // only the inter-row separators remain.
-                .padding(.top, -Theme.hairline)
+                .padding(.top, -Theme.hairline(displayScale))
                 .background(Theme.bgSecondary)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.radiusMd))
-                .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
+                .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline(displayScale)))
         }
     }
 
@@ -455,7 +456,7 @@ struct SettingsView: View {
             .font(mono ? Theme.mono(12) : .system(size: 12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
             .padding(.horizontal, 9).padding(.vertical, 4)
             .background(Theme.bgPrimary, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline(displayScale)))
     }
 
     private func miniButton(_ title: String, action: @escaping () -> Void) -> some View {
@@ -463,7 +464,7 @@ struct SettingsView: View {
             .font(.system(size: 12)).foregroundStyle(Theme.textPrimary)
             .padding(.horizontal, 10).padding(.vertical, 4)
             .background(Theme.bgPrimary, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline(displayScale)))
     }
 
     /// A model dropdown driven by the live `agy models` list. Defaults to
@@ -495,7 +496,7 @@ struct SettingsView: View {
         }
         .padding(.horizontal, 9).padding(.vertical, 4)
         .background(Theme.bgPrimary, in: RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline(displayScale)))
     }
 
     private func badge(_ text: String, system: String, fg: Color, bg: Color) -> some View {

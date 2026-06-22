@@ -3,6 +3,7 @@ import VokabKit
 
 /// Phrase / idiom detail (SPEC §12 surface #1).
 struct PhraseDetailView: View {
+    @Environment(\.displayScale) private var displayScale
     @EnvironmentObject private var env: AppEnvironment
     @State private var current: Entry
     @State private var enriching = false
@@ -268,7 +269,7 @@ struct PhraseDetailView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading).padding(14)
 
-            Rectangle().fill(Theme.borderTertiary).frame(width: Theme.hairline)
+            Rectangle().fill(Theme.borderTertiary).frame(width: Theme.hairline(displayScale))
 
             VStack(alignment: .leading, spacing: 6) {
                 SecLabel("Meaning")

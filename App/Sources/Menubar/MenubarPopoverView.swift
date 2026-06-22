@@ -4,6 +4,7 @@ import VokabKit
 
 /// Menubar popover (SPEC §12 surface #8).
 struct MenubarPopoverView: View {
+    @Environment(\.displayScale) private var displayScale
     @EnvironmentObject var env: AppEnvironment
 
     @State private var dueCount = 0
@@ -132,7 +133,7 @@ struct MenubarPopoverView: View {
                     .frame(width: 26, height: 20)
                     .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: 5))
                     .overlay(RoundedRectangle(cornerRadius: 5)
-                        .strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
+                        .strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline(displayScale)))
             }
             .buttonStyle(.plain).help(L.t("Paste from clipboard", "Dán từ clipboard"))
         }
@@ -141,7 +142,7 @@ struct MenubarPopoverView: View {
         .overlay(
             RoundedRectangle(cornerRadius: Theme.radiusMd)
                 .strokeBorder(captureFocused ? Theme.accent : Theme.borderTertiary,
-                              lineWidth: captureFocused ? 1 : Theme.hairline)
+                              lineWidth: captureFocused ? 1 : Theme.hairline(displayScale))
         )
         .shadow(color: captureFocused ? Theme.accent.opacity(0.18) : .clear, radius: 2.5)
         .animation(.easeOut(duration: 0.15), value: captureFocused)

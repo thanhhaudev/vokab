@@ -5,6 +5,7 @@ import VokabKit
 /// language filters, metric cards, and a due-dot list. Selecting a row opens the
 /// matching detail (word/phrase/paragraph) as a sheet.
 struct LibraryView: View {
+    @Environment(\.displayScale) private var displayScale
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var model: LibraryViewModel
     @State private var selected: Entry?
@@ -352,7 +353,7 @@ struct LibraryView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Rectangle().fill(Theme.borderTertiary)
-                    .frame(height: Theme.hairline).opacity(0.7)
+                    .frame(height: Theme.hairline(displayScale)).opacity(0.7)
                 HStack(spacing: 5) {
                     Image(systemName: "calendar").font(.system(size: 10))
                         .foregroundStyle(Theme.textTertiary)
@@ -367,7 +368,7 @@ struct LibraryView: View {
         }
         .padding(9)
         .background(Theme.bgPrimary, in: RoundedRectangle(cornerRadius: Theme.radiusLg))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLg).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLg).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline(displayScale)))
         .padding(8)
         .task { model.loadQuota() }
     }
@@ -537,7 +538,7 @@ struct LibraryView: View {
                 .padding(.horizontal, 9).padding(.vertical, 7)
                 .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
                 .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd)
-                    .strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
+                    .strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline(displayScale)))
         }
         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
         .disabled(model.rows.isEmpty)
@@ -561,7 +562,7 @@ struct LibraryView: View {
         .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
         .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd)
             .strokeBorder(filterFocused ? Theme.accent : Theme.borderTertiary,
-                          lineWidth: filterFocused ? 1 : Theme.hairline))
+                          lineWidth: filterFocused ? 1 : Theme.hairline(displayScale)))
     }
 
     /// Sort control: Recent (added) · A–Z · Due. Default Recent.
@@ -580,7 +581,7 @@ struct LibraryView: View {
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
             .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd)
-                .strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
+                .strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline(displayScale)))
         }
         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
     }

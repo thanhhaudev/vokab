@@ -6,6 +6,7 @@ import VokabKit
 /// for headwords, `.small` for inline example rows. While this text is being
 /// spoken the icon becomes a spinner and tapping again stops playback.
 struct PronounceButton: View {
+    @Environment(\.displayScale) private var displayScale
     let text: String
     let accent: Accent
     var size: Size = .regular
@@ -34,7 +35,7 @@ struct PronounceButton: View {
                 }
             }
             .frame(width: size.diameter, height: size.diameter)
-            .overlay(Circle().strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline))
+            .overlay(Circle().strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline(displayScale)))
             .contentShape(Circle())
         }
         .buttonStyle(.plain)

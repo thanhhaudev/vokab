@@ -7,6 +7,7 @@ import VokabKit
 /// a word count, a language dropdown, a functional [Auto|Word|Phrase] override,
 /// and a Capture button. Enter captures.
 struct CaptureFormView: View {
+    @Environment(\.displayScale) private var displayScale
     @State private var text = ""
     @FocusState private var focused: Bool
     @State private var typeChoice: TypeChoice = .auto
@@ -44,20 +45,20 @@ struct CaptureFormView: View {
                     Image(systemName: "doc.on.clipboard").font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
                         .frame(width: 26, height: 20)   // fixed size so it matches the ⏎ badge exactly
                         .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: 5))
-                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
+                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline(displayScale)))
                 }
                 .buttonStyle(.plain).help(L.t("Paste from clipboard", "Dán từ clipboard"))
                 if !active {
                     Text("⏎").font(Theme.mono(11)).foregroundStyle(Theme.textTertiary)
                         .frame(width: 26, height: 20)
                         .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: 5))
-                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
+                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline(displayScale)))
                 }
             }
             .padding(.horizontal, 11).padding(.vertical, 9)
 
             if active {
-                Rectangle().fill(Theme.borderTertiary).frame(height: Theme.hairline)
+                Rectangle().fill(Theme.borderTertiary).frame(height: Theme.hairline(displayScale))
                 HStack(spacing: 8) {
                     Text(L.t("Detected", "Nhận diện")).font(.system(size: 10)).foregroundStyle(Theme.textTertiary)
                     DetectedTypePill(type: effectiveType, count: wordCount)
@@ -110,7 +111,7 @@ struct CaptureFormView: View {
         .clipShape(RoundedRectangle(cornerRadius: Theme.radiusMd))
         .overlay(
             RoundedRectangle(cornerRadius: Theme.radiusMd)
-                .strokeBorder(active ? Theme.accent : Theme.borderTertiary, lineWidth: active ? 1 : Theme.hairline)
+                .strokeBorder(active ? Theme.accent : Theme.borderTertiary, lineWidth: active ? 1 : Theme.hairline(displayScale))
         )
         .shadow(color: active ? Theme.accent.opacity(0.18) : .clear, radius: 2.5)   // mockup .rform.active glow
         .animation(.easeOut(duration: 0.15), value: active)

@@ -89,6 +89,7 @@ extension String {
 // MARK: - Chip (outlined, clickable-looking)
 
 struct Chip: View {
+    @Environment(\.displayScale) private var displayScale
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
@@ -96,7 +97,7 @@ struct Chip: View {
             .font(.system(size: 12))
             .padding(.horizontal, 10).padding(.vertical, 4)
             .background(Theme.bgPrimary, in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline))
+            .overlay(Capsule().strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline(displayScale)))
             .foregroundStyle(Theme.textSecondary)
     }
 }
@@ -141,13 +142,14 @@ struct Hairline: View {
 // MARK: - Window card container (white, hairline border, rounded)
 
 struct WinCard<Content: View>: View {
+    @Environment(\.displayScale) private var displayScale
     @ViewBuilder var content: Content
     var body: some View {
         VStack(spacing: 0) { content }
             .background(Theme.bgPrimary)
             .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLg))
             .overlay(RoundedRectangle(cornerRadius: Theme.radiusLg)
-                .strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
+                .strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline(displayScale)))
     }
 }
 
@@ -164,13 +166,23 @@ struct VPrimaryButtonStyle: ButtonStyle {
 }
 
 struct VSecondaryButtonStyle: ButtonStyle {
+    // ButtonStyle is not a View, so @Environment doesn't update here — read
+    // displayScale inside a real View so the hairline border stays one pixel.
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 13))
-            .padding(.horizontal, 14).padding(.vertical, 5)
-            .background(Theme.bgPrimary.opacity(configuration.isPressed ? 0.7 : 1), in: RoundedRectangle(cornerRadius: Theme.radiusMd))
-            .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline))
-            .foregroundStyle(Theme.textPrimary)
+        StyledLabel(configuration: configuration)
+    }
+
+    private struct StyledLabel: View {
+        @Environment(\.displayScale) private var displayScale
+        let configuration: Configuration
+        var body: some View {
+            configuration.label
+                .font(.system(size: 13))
+                .padding(.horizontal, 14).padding(.vertical, 5)
+                .background(Theme.bgPrimary.opacity(configuration.isPressed ? 0.7 : 1), in: RoundedRectangle(cornerRadius: Theme.radiusMd))
+                .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd).strokeBorder(Theme.borderSecondary, lineWidth: Theme.hairline(displayScale)))
+                .foregroundStyle(Theme.textPrimary)
+        }
     }
 }
 

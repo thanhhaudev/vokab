@@ -1,31 +1,44 @@
 import SwiftUI
+import AppKit
 
 /// Design tokens transcribed from `docs/mockups/mockups.html` so the SwiftUI app
 /// reproduces the mockup faithfully. The mockup is light-only; colors are
 /// explicit (not system semantic) so the look is identical regardless of the
 /// host appearance.
 enum Theme {
+    /// Resolves `light`/`dark` against the drawing view's effective appearance,
+    /// so a single static token re-resolves when the window flips light↔dark.
+    static func dyn(_ light: Color, _ dark: Color) -> Color {
+        Color(nsColor: NSColor(name: nil) { ap in
+            let isDark = ap.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            return NSColor(isDark ? dark : light)
+        })
+    }
+    static func dyn(light: UInt32, dark: UInt32) -> Color {
+        dyn(Color(hex: light), Color(hex: dark))
+    }
+
     // Backgrounds
-    static let bgPrimary = Color(hex: 0xFFFFFF)
-    static let bgSecondary = Color(hex: 0xF6F5F0)
-    static let bgTertiary = Color(hex: 0xEEECE3)
-    static let bgDanger = Color(hex: 0xFCEBEB)
+    static let bgPrimary = dyn(light: 0xFFFFFF, dark: 0x1E1E1C)
+    static let bgSecondary = dyn(light: 0xF6F5F0, dark: 0x262521)
+    static let bgTertiary = dyn(light: 0xEEECE3, dark: 0x302E28)
+    static let bgDanger = dyn(light: 0xFCEBEB, dark: 0x3A2422)
 
     // Text
-    static let textPrimary = Color(hex: 0x1B1B18)
-    static let textSecondary = Color(hex: 0x605F59)
-    static let textTertiary = Color(hex: 0x92918A)
-    static let textDanger = Color(hex: 0xA32D2D)
+    static let textPrimary = dyn(light: 0x1B1B18, dark: 0xF2F1EC)
+    static let textSecondary = dyn(light: 0x605F59, dark: 0xB7B5AC)
+    static let textTertiary = dyn(light: 0x92918A, dark: 0x86847C)
+    static let textDanger = dyn(light: 0xA32D2D, dark: 0xE57373)
 
     // Hairline borders
-    static let borderTertiary = Color.black.opacity(0.09)
-    static let borderSecondary = Color.black.opacity(0.16)
-    static let borderPrimary = Color.black.opacity(0.24)
+    static let borderTertiary = dyn(.black.opacity(0.09), .white.opacity(0.12))
+    static let borderSecondary = dyn(.black.opacity(0.16), .white.opacity(0.18))
+    static let borderPrimary = dyn(.black.opacity(0.24), .white.opacity(0.26))
 
     // Accent
-    static let accent = Color(hex: 0x534AB7)
-    static let accentBg = Color(hex: 0xEEEDFE)
-    static let accentText = Color(hex: 0x3C3489)
+    static let accent = dyn(light: 0x534AB7, dark: 0x8A82E8)
+    static let accentBg = dyn(light: 0xEEEDFE, dark: 0x2E2A52)
+    static let accentText = dyn(light: 0x3C3489, dark: 0xC8C2F5)
 
     // Category dots/pills. Indexed by `categories.color_index`
     // (see `CategoryService.paletteSize` = 12). Seed categories map to indices

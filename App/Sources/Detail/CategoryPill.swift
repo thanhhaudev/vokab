@@ -28,9 +28,9 @@ struct CategoryPill: View {
                 Text(current ?? L.t("Uncategorized", "Chưa phân loại"))
             }
             .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(Color(hex: 0x085041))
+            .foregroundStyle(Theme.saveFg)
             .padding(.horizontal, 9).padding(.vertical, 4)
-            .background(Color(hex: 0xE1F5EE)).clipShape(Capsule())
+            .background(Theme.saveBg).clipShape(Capsule())
         }
         .menuStyle(.borderlessButton).fixedSize()
         .task { taxonomy = (try? env.categories.currentTaxonomy()) ?? [] }

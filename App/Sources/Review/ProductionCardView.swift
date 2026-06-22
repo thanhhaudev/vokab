@@ -77,11 +77,11 @@ struct ProductionCardView: View {
 
     private var correctFeedback: some View {
         VStack(alignment: .leading, spacing: 10) {
-            feedbackBox(bg: Color(hex: 0xEAF3DE), border: Theme.sugBorder) {
+            feedbackBox(bg: Theme.successBg, border: Theme.sugBorder) {
                 Label(L.t("Correct & very natural", "Chính xác & rất tự nhiên"), systemImage: "checkmark")
-                    .font(.system(size: 13, weight: .medium)).foregroundStyle(Color(hex: 0x27500A))
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.successFg)
                 if let explanation = feedback?.explanationVi, !explanation.isEmpty {
-                    Text(explanation).font(.system(size: 13)).foregroundStyle(Color(hex: 0x3B6D11)).lineSpacing(2)
+                    Text(explanation).font(.system(size: 13)).foregroundStyle(Theme.successFg).lineSpacing(2)
                 }
             }
             HStack(spacing: 7) {
@@ -95,12 +95,12 @@ struct ProductionCardView: View {
 
     private var wrongFeedback: some View {
         VStack(alignment: .leading, spacing: 10) {
-            feedbackBox(bg: Theme.highlightBg, border: Color(hex: 0xEF9F27)) {
+            feedbackBox(bg: Theme.highlightBg, border: Theme.dyn(light: 0xEF9F27, dark: 0xF5B84A)) {
                 Label(L.t("Almost — needs a fix", "Gần đúng — cần chỉnh"), systemImage: "lightbulb")
                     .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.highlightText)
                 correctedText.font(.system(size: 14)).lineSpacing(3).padding(.top, 2)
                 if let explanation = feedback?.explanationVi, !explanation.isEmpty {
-                    Text(explanation).font(.system(size: 13)).foregroundStyle(Color(hex: 0x854F0B)).lineSpacing(2)
+                    Text(explanation).font(.system(size: 13)).foregroundStyle(Theme.warnFg).lineSpacing(2)
                 }
             }
             HStack {

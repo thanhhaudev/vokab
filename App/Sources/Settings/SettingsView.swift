@@ -326,7 +326,7 @@ struct SettingsView: View {
                 }
                 SettingsRow(L.t("Authentication", "Xác thực"), sub: L.t("Managed by agy login", "Quản lý bởi agy login")) {
                     badge(L.t("Signed in", "Đã đăng nhập"), system: "person.crop.circle.badge.checkmark",
-                          fg: Color(hex: 0x0C447C), bg: Color(hex: 0xE6F1FB))
+                          fg: Theme.infoFg, bg: Theme.infoBg)
                 }
             }
 
@@ -497,11 +497,11 @@ struct SettingsView: View {
     @ViewBuilder private var statusBadge: some View {
         switch testResult {
         case .testing: HStack(spacing: 6) { ProgressView().controlSize(.small); Text(L.t("Testing…", "Đang kiểm tra…")).font(.system(size: 11)).foregroundStyle(Theme.textSecondary) }
-        case .ok: badge("OK", system: "checkmark.circle", fg: Color(hex: 0x27500A), bg: Color(hex: 0xEAF3DE))
+        case .ok: badge("OK", system: "checkmark.circle", fg: Theme.successFg, bg: Theme.successBg)
         case .fail(let m): badge(m, system: "xmark.circle", fg: Theme.textDanger, bg: Theme.bgDanger)
         case .none:
             if FileManager.default.isExecutableFile(atPath: settings.agyPath) {
-                badge(L.t("Detected", "Đã dò thấy"), system: "checkmark.circle", fg: Color(hex: 0x27500A), bg: Color(hex: 0xEAF3DE))
+                badge(L.t("Detected", "Đã dò thấy"), system: "checkmark.circle", fg: Theme.successFg, bg: Theme.successBg)
             } else {
                 badge(L.t("Not found", "Không thấy"), system: "xmark.circle", fg: Theme.textDanger, bg: Theme.bgDanger)
             }

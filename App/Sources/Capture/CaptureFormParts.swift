@@ -28,11 +28,11 @@ struct DetectedTypePill: View {
     let type: CardType
     var count: Int? = nil
 
-    private var spec: (bg: UInt32, fg: UInt32, icon: String, name: String) {
+    private var spec: (bg: Color, fg: Color, icon: String, name: String) {
         switch type {
-        case .word: return (0xEEEDFE, 0x3C3489, "textformat", L.t("Word", "Word"))
-        case .phrase: return (0xE1F5EE, 0x085041, "text.quote", L.t("Phrase", "Phrase"))
-        case .paragraphItem: return (0xFAEEDA, 0x633806, "text.alignleft", L.t("Paragraph", "Paragraph"))
+        case .word: return (Theme.accentBg, Theme.accentText, "textformat", L.t("Word", "Word"))
+        case .phrase: return (Theme.saveBg, Theme.saveFg, "text.quote", L.t("Phrase", "Phrase"))
+        case .paragraphItem: return (Theme.warnBg, Theme.warnFg, "text.alignleft", L.t("Paragraph", "Paragraph"))
         }
     }
 
@@ -44,9 +44,9 @@ struct DetectedTypePill: View {
             Text(s.name + suffix).lineLimit(1)
         }
         .font(.system(size: 11, weight: .medium))
-        .foregroundStyle(Color(hex: s.fg))
+        .foregroundStyle(s.fg)
         .padding(.horizontal, 8).padding(.vertical, 3)
-        .background(Color(hex: s.bg), in: Capsule())
+        .background(s.bg, in: Capsule())
         .fixedSize(horizontal: true, vertical: false)
     }
 }

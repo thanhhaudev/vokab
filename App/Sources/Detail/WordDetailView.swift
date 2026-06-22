@@ -208,7 +208,7 @@ struct WordDetailView: View {
         for (i, word) in words.enumerated() {
             let piece: Text
             if POSColorizer.isLanguage(word) {
-                piece = Text(word).font(Theme.mono(13)).foregroundColor(Color(hex: 0x085041))
+                piece = Text(word).font(Theme.mono(13)).foregroundColor(Theme.saveFg)
             } else {
                 piece = Text(word)
             }
@@ -391,7 +391,7 @@ struct WordDetailView: View {
             HStack(spacing: 10) {
                 Label(L.t("Saved", "Đã lưu"), systemImage: "checkmark.circle.fill")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color(hex: 0x0F6E56))
+                    .foregroundStyle(Theme.diffIns)
                 if let app = entry.sourceApp {
                     Text("Source: \(app)\(entry.sourceURL.map { " · \($0)" } ?? "")")
                         .font(.system(size: 12)).foregroundStyle(Theme.textTertiary).lineLimit(1)

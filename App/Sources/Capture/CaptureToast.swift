@@ -98,9 +98,9 @@ struct CaptureToastView: View {
                     Text(category).lineLimit(1)
                 }
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color(hex: 0x085041))
+                .foregroundStyle(Theme.saveFg)
                 .padding(.horizontal, 7).padding(.vertical, 3)
-                .background(Color(hex: 0xE1F5EE), in: Capsule())
+                .background(Theme.saveBg, in: Capsule())
                 .fixedSize()
             }
         }
@@ -171,7 +171,7 @@ struct PulsingDots: View {
         HStack(spacing: 4) {
             ForEach(0..<count, id: \.self) { i in
                 Circle()
-                    .fill(Color(hex: 0x7F77DD))
+                    .fill(Theme.accent)
                     .frame(width: dot, height: dot)
                     .opacity(animating ? 1.0 : 0.25)
                     .animation(

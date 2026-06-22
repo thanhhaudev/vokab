@@ -66,4 +66,18 @@ final class SettingsRoundTripTests: XCTestCase {
         XCTAssertFalse(s.hardBlockOnLimit)
         XCTAssertEqual(s.dailyLimit, 120)
     }
+
+    func test_appearanceMode_defaultsSystem_andRoundTrips() throws {
+        XCTAssertEqual(VokabSettings().appearanceMode, .system)
+        var s = VokabSettings(); s.appearanceMode = .dark
+        let data = try JSONEncoder().encode(s)
+        let back = try JSONDecoder().decode(VokabSettings.self, from: data)
+        XCTAssertEqual(back.appearanceMode, .dark)
+    }
+
+    func test_oldJSON_withoutAppearanceMode_decodesToSystem() throws {
+        let json = #"{"dailyLimit":120}"#
+        let s = try JSONDecoder().decode(VokabSettings.self, from: Data(json.utf8))
+        XCTAssertEqual(s.appearanceMode, .system)
+    }
 }

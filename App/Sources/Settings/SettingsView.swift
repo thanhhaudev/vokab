@@ -438,6 +438,12 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             SecLabel(title)
             VStack(spacing: 0) { content() }
+                // Each SettingsRow draws a full-width top hairline as its row
+                // separator. Inside a bordered card the first row's hairline
+                // overlaps the stroke border (darker top edge), so pull the
+                // content up by one hairline to clip that first line away —
+                // only the inter-row separators remain.
+                .padding(.top, -Theme.hairline)
                 .background(Theme.bgSecondary)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.radiusMd))
                 .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))

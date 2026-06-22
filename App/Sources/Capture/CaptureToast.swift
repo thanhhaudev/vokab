@@ -171,7 +171,7 @@ struct PulsingDots: View {
         HStack(spacing: 4) {
             ForEach(0..<count, id: \.self) { i in
                 Circle()
-                    .fill(Theme.accent)
+                    .fill(Theme.dyn(light: 0x7F77DD, dark: 0x9D95E8))
                     .frame(width: dot, height: dot)
                     .opacity(animating ? 1.0 : 0.25)
                     .animation(

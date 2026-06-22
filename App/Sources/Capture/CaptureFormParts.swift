@@ -32,7 +32,7 @@ struct DetectedTypePill: View {
         switch type {
         case .word: return (Theme.accentBg, Theme.accentText, "textformat", L.t("Word", "Word"))
         case .phrase: return (Theme.saveBg, Theme.saveFg, "text.quote", L.t("Phrase", "Phrase"))
-        case .paragraphItem: return (Theme.warnBg, Theme.warnFg, "text.alignleft", L.t("Paragraph", "Paragraph"))
+        case .paragraphItem: return (Theme.warnBg, Theme.highlightText, "text.alignleft", L.t("Paragraph", "Paragraph"))
         }
     }
 

@@ -81,7 +81,7 @@ struct ProductionCardView: View {
                 Label(L.t("Correct & very natural", "Chính xác & rất tự nhiên"), systemImage: "checkmark")
                     .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.successFg)
                 if let explanation = feedback?.explanationVi, !explanation.isEmpty {
-                    Text(explanation).font(.system(size: 13)).foregroundStyle(Theme.successFg).lineSpacing(2)
+                    Text(explanation).font(.system(size: 13)).foregroundStyle(Theme.dyn(light: 0x3B6D11, dark: 0x9BC47A)).lineSpacing(2)
                 }
             }
             HStack(spacing: 7) {

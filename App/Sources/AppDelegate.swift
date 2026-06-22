@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.appearance = NSAppearance(named: .aqua)
 
         let env = AppEnvironment.shared
+        if let env { StatusItemController.shared.configure(env: env) }   // menubar status item + popover
         CaptureController.shared.env = env
         WindowManager.shared.env = env
         NotificationManager.shared.env = env

@@ -2,9 +2,11 @@ import SwiftUI
 
 /// vokab menubar agent entry point.
 ///
-/// Runs as an `LSUIElement` accessory (no Dock icon). The UI lives in a
-/// `MenuBarExtra` popover; Library and Review windows are opened on demand by
-/// `WindowManager` (AppKit-managed). The Settings scene hosts the AI Engine tab.
+/// Runs as an `LSUIElement` accessory (no Dock icon). The menubar status item and
+/// its popover are owned by `StatusItemController` (AppKit), wired in `AppDelegate`
+/// — not a `MenuBarExtra` scene, so the activity dot can be a separate amber layer
+/// over a template V (per-screen tinting). Library and Review windows are opened on
+/// demand by `WindowManager` (AppKit-managed). The Settings scene hosts the AI Engine tab.
 @main
 struct VokabApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -18,15 +20,9 @@ struct VokabApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra {
-            MenubarPopoverView().environmentObject(env)
-        } label: {
-            // One image (V, or V + amber dot when analyzing). MenuBarExtra clips a
-            // multi-view label to one icon slot, so the dot must live inside the image.
-            Image(nsImage: env.activeAnalyses > 0 ? MenubarIcon.processing(pulse: env.pulse) : MenubarIcon.idle())
-        }
-        .menuBarExtraStyle(.window)
-
+        // The menubar status item lives in StatusItemController (see AppDelegate);
+        // this scene only hosts Settings. `env` is created here and shared via
+        // `AppEnvironment.shared`, which is what the status item's popover uses.
         Settings {
             SettingsView().environmentObject(env)
         }

@@ -6,12 +6,16 @@ import AppKit
 /// L 330 166` (round cap/join) in a 512×512 space. The V is drawn at one fixed
 /// size in both states via `glyphRect` so it never shrinks/grows.
 ///
-/// `idle()` is a template image (system-tinted for light/dark). `processing()`
-/// is a WIDER single image carrying the V plus an amber activity dot beside it.
-/// It must be one image, not a composed SwiftUI label: `MenuBarExtra` renders
-/// its label into a single icon-sized slot and clips any extra horizontal
-/// content, so an `HStack { Image; Circle }` loses the dot. Because the dot
-/// carries color, the whole image is non-template and the V is tinted manually.
+/// Both `idle()` and `processingGlyph()` are **template** images, so macOS tints
+/// the V per-screen (white on the active menubar, black/dimmed on the others).
+/// `processingGlyph()` is a WIDER canvas: the V stays in the left 18pt region and
+/// the right region is transparent, reserving room for the amber activity dot.
+///
+/// The dot is NOT drawn into the image (a colored dot would force the whole image
+/// non-template, defeating per-screen tinting — the original bug). Instead
+/// `StatusItemController` draws the dot as a separate amber `CALayer` over the
+/// status button, positioned via `dotFrame`. The V and the dot are thus two
+/// independent layers: the V auto-tints, the dot keeps its amber color.
 enum MenubarIcon {
     /// Logical size of the idle V region; the system scales for Retina.
     private static let size = NSSize(width: 18, height: 18)
@@ -41,9 +45,10 @@ enum MenubarIcon {
     private static let dotBaselineNudge: CGFloat = 1
     private static var glyphBaseline: CGFloat { 9 - 63 * (glyphWidth - 2) / 184 - dotBaselineNudge }
 
-    /// Amber activity dot color (#EF9F27, sRGB).
-    private static let dotColor = NSColor(srgbRed: 0xEF / 255.0, green: 0x9F / 255.0,
-                                          blue: 0x27 / 255.0, alpha: 1)
+    /// Amber activity dot color (#EF9F27, sRGB). Used by `StatusItemController`
+    /// for the overlay layer; never drawn into the (template) image.
+    static let dotColor = NSColor(srgbRed: 0xEF / 255.0, green: 0x9F / 255.0,
+                                  blue: 0x27 / 255.0, alpha: 1)
 
     /// Template V — system-tinted (black/white/accent) to match the menubar.
     static func idle() -> NSImage {
@@ -55,35 +60,30 @@ enum MenubarIcon {
         return image
     }
 
-    /// V (same fixed size as idle) plus an amber activity dot to its right, in a
-    /// wider canvas. Non-template (carries color), so the V is stroked in the
-    /// menubar's current foreground color to stay visible in light/dark.
-    /// `pulse` is the dot's alpha (0…1), animated by `AppEnvironment` for a breath.
-    static func processing(pulse: CGFloat = 1.0) -> NSImage {
-        let dotX = glyphRightEdge + dotGap
-        let width = dotX + dotDiameter + dotTrailing
-        let image = NSImage(size: NSSize(width: width, height: size.height), flipped: false) { rect in
-            // V occupies the left 18pt region — identical placement to idle, so the
-            // glyph stays put and only the dot extends the item rightward.
-            let vRegion = NSRect(x: 0, y: 0, width: size.width, height: rect.height)
-            drawChevron(in: glyphRect(in: vRegion), color: systemMenubarForeground())
-            // Dot resting on the V's baseline, tucked into the lower-right notch ("V.").
-            let dot = NSRect(x: dotX, y: glyphBaseline, width: dotDiameter, height: dotDiameter)
-            dotColor.withAlphaComponent(max(0, min(1, pulse))).setFill()
-            NSBezierPath(ovalIn: dot).fill()
-            return true
-        }
-        image.isTemplate = false
-        return image
+    /// Size of the wider processing canvas: V's 18pt region plus room for the dot.
+    static var processingSize: NSSize {
+        NSSize(width: (glyphRightEdge + dotGap) + dotDiameter + dotTrailing, height: size.height)
     }
 
-    /// The menu bar's foreground color. We can't use NSApp.effectiveAppearance or
-    /// a dynamic color (NSColor.labelColor): the app forces NSApp.appearance = .aqua,
-    /// so both would always resolve to the light-mode (black) value. Read the system
-    /// Dark Mode setting directly instead, which the forced app appearance does not affect.
-    private static func systemMenubarForeground() -> NSColor {
-        let dark = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
-        return dark ? .white : .black
+    /// The amber dot's frame within the `processingSize` canvas (origin bottom-left).
+    /// `StatusItemController` maps this into the status button to place the layer,
+    /// so the dot lands in the same lower-right notch ("V.") as before.
+    static var dotFrame: NSRect {
+        NSRect(x: glyphRightEdge + dotGap, y: glyphBaseline, width: dotDiameter, height: dotDiameter)
+    }
+
+    /// Wide-canvas **template** V (no dot, no manual color): the V occupies the
+    /// left 18pt region — identical placement to `idle()` — and the right region is
+    /// transparent. Template, so macOS tints the V per-screen. The amber dot is
+    /// drawn separately by `StatusItemController` as a `CALayer`.
+    static func processingGlyph() -> NSImage {
+        let image = NSImage(size: processingSize, flipped: false) { rect in
+            let vRegion = NSRect(x: 0, y: 0, width: size.width, height: rect.height)
+            drawChevron(in: glyphRect(in: vRegion), color: .black)
+            return true
+        }
+        image.isTemplate = true
+        return image
     }
 
     /// Centered sub-rect sizing the V to a native ~15pt-wide weight inside `rect`.

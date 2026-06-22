@@ -50,10 +50,7 @@ final class StatusItemController: NSObject {
         host.sizingOptions = .preferredContentSize   // popover tracks SwiftUI content size
         popover.contentViewController = host
         popover.behavior = .transient                // dismiss on outside click
-        // Force aqua (non-vibrant) like the rest of the app (NSApp.appearance = .aqua).
-        // Otherwise the popover's vibrant appearance makes SwiftUI's default `.primary`
-        // text (e.g. due-row words, typed capture text) blend into the white background.
-        popover.appearance = NSAppearance(named: .aqua)
+        // Popover inherits the app appearance (adapts to light/dark via NSApp.appearance).
 
         env.$activeAnalyses
             .receive(on: RunLoop.main)

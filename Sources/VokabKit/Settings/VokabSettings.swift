@@ -14,6 +14,13 @@ public enum JSONErrorBehavior: String, Codable, Sendable, CaseIterable {
     case showRaw    // surface the raw output, do not retry
 }
 
+/// App appearance preference (Settings → General). `.system` follows macOS.
+public enum AppearanceMode: String, Codable, Sendable, CaseIterable {
+    case system
+    case light
+    case dark
+}
+
 /// User-configurable settings (Settings tabs, SPEC §13). Plain value type so it
 /// is trivially testable and `Sendable`. Decoding is resilient: missing keys
 /// fall back to defaults so adding fields never breaks older persisted JSON.
@@ -40,6 +47,7 @@ public struct VokabSettings: Codable, Sendable, Equatable {
     public var globalHotkeyModifiers: Int
     public var pronunciationAccent: String
     public var autoPlayPronunciation: Bool
+    public var appearanceMode: AppearanceMode
     // Review
     public var newCardsPerDay: Int
     public var productionUnlockInterval: Int
@@ -72,6 +80,7 @@ public struct VokabSettings: Codable, Sendable, Equatable {
         globalHotkeyModifiers: Int = 0,
         pronunciationAccent: String = "en-US",
         autoPlayPronunciation: Bool = false,
+        appearanceMode: AppearanceMode = .system,
         newCardsPerDay: Int = 20,
         productionUnlockInterval: Int = 7,
         productionUnlockReps: Int = 2,
@@ -101,6 +110,7 @@ public struct VokabSettings: Codable, Sendable, Equatable {
         self.globalHotkeyModifiers = globalHotkeyModifiers
         self.pronunciationAccent = pronunciationAccent
         self.autoPlayPronunciation = autoPlayPronunciation
+        self.appearanceMode = appearanceMode
         self.newCardsPerDay = newCardsPerDay
         self.productionUnlockInterval = productionUnlockInterval
         self.productionUnlockReps = productionUnlockReps
@@ -117,7 +127,7 @@ public struct VokabSettings: Codable, Sendable, Equatable {
         case agyPath, model, enrichModel, timeoutSeconds, dailyLimit, hardBlockOnLimit, meaningLanguage, appLanguage
         case quotaHitBehavior, jsonErrorBehavior, maxConcurrent, minParagraphLevel
         case toastPosition, globalHotkeyEnabled, globalHotkeyKeyCode, globalHotkeyModifiers
-        case pronunciationAccent, autoPlayPronunciation
+        case pronunciationAccent, autoPlayPronunciation, appearanceMode
         case newCardsPerDay, productionUnlockInterval, productionUnlockReps, startingEase
         case clozeUnlockInterval, clozeUnlockReps
         case errorUnlockInterval, errorUnlockReps
@@ -149,6 +159,7 @@ public struct VokabSettings: Codable, Sendable, Equatable {
         globalHotkeyModifiers = (try? c.decodeIfPresent(Int.self, forKey: .globalHotkeyModifiers)) ?? nil ?? d.globalHotkeyModifiers
         pronunciationAccent = (try? c.decodeIfPresent(String.self, forKey: .pronunciationAccent)) ?? nil ?? d.pronunciationAccent
         autoPlayPronunciation = (try? c.decodeIfPresent(Bool.self, forKey: .autoPlayPronunciation)) ?? nil ?? d.autoPlayPronunciation
+        appearanceMode = (try? c.decodeIfPresent(AppearanceMode.self, forKey: .appearanceMode)) ?? nil ?? d.appearanceMode
         newCardsPerDay = (try? c.decodeIfPresent(Int.self, forKey: .newCardsPerDay)) ?? nil ?? d.newCardsPerDay
         productionUnlockInterval = (try? c.decodeIfPresent(Int.self, forKey: .productionUnlockInterval)) ?? nil ?? d.productionUnlockInterval
         productionUnlockReps = (try? c.decodeIfPresent(Int.self, forKey: .productionUnlockReps)) ?? nil ?? d.productionUnlockReps

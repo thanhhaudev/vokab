@@ -69,6 +69,20 @@ struct SettingsView: View {
 
     private var general: some View {
         VStack(alignment: .leading, spacing: 16) {
+            group(L.t("Appearance", "Giao diện")) {
+                SettingsRow(L.t("Theme", "Chủ đề"),
+                            sub: L.t("System follows macOS", "Hệ thống theo macOS")) {
+                    Picker("", selection: Binding(
+                        get: { settings.appearanceMode },
+                        set: { settings.appearanceMode = $0; persist(); AppearanceController.apply($0) }
+                    )) {
+                        Text(L.t("System", "Hệ thống")).tag(AppearanceMode.system)
+                        Text(L.t("Light", "Sáng")).tag(AppearanceMode.light)
+                        Text(L.t("Dark", "Tối")).tag(AppearanceMode.dark)
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+            }
             group(L.t("Startup", "Khởi động")) {
                 SettingsRow(L.t("Launch at login", "Mở khi đăng nhập")) {
                     Toggle("", isOn: Binding(
@@ -326,7 +340,7 @@ struct SettingsView: View {
                 }
                 SettingsRow(L.t("Authentication", "Xác thực"), sub: L.t("Managed by agy login", "Quản lý bởi agy login")) {
                     badge(L.t("Signed in", "Đã đăng nhập"), system: "person.crop.circle.badge.checkmark",
-                          fg: Color(hex: 0x0C447C), bg: Color(hex: 0xE6F1FB))
+                          fg: Theme.infoFg, bg: Theme.infoBg)
                 }
             }
 
@@ -424,7 +438,14 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             SecLabel(title)
             VStack(spacing: 0) { content() }
-                .background(Theme.bgSecondary, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
+                // Each SettingsRow draws a full-width top hairline as its row
+                // separator. Inside a bordered card the first row's hairline
+                // overlaps the stroke border (darker top edge), so pull the
+                // content up by one hairline to clip that first line away —
+                // only the inter-row separators remain.
+                .padding(.top, -Theme.hairline)
+                .background(Theme.bgSecondary)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.radiusMd))
                 .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd).strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline))
         }
     }
@@ -496,11 +517,11 @@ struct SettingsView: View {
     @ViewBuilder private var statusBadge: some View {
         switch testResult {
         case .testing: HStack(spacing: 6) { ProgressView().controlSize(.small); Text(L.t("Testing…", "Đang kiểm tra…")).font(.system(size: 11)).foregroundStyle(Theme.textSecondary) }
-        case .ok: badge("OK", system: "checkmark.circle", fg: Color(hex: 0x27500A), bg: Color(hex: 0xEAF3DE))
+        case .ok: badge("OK", system: "checkmark.circle", fg: Theme.successFg, bg: Theme.successBg)
         case .fail(let m): badge(m, system: "xmark.circle", fg: Theme.textDanger, bg: Theme.bgDanger)
         case .none:
             if FileManager.default.isExecutableFile(atPath: settings.agyPath) {
-                badge(L.t("Detected", "Đã dò thấy"), system: "checkmark.circle", fg: Color(hex: 0x27500A), bg: Color(hex: 0xEAF3DE))
+                badge(L.t("Detected", "Đã dò thấy"), system: "checkmark.circle", fg: Theme.successFg, bg: Theme.successBg)
             } else {
                 badge(L.t("Not found", "Không thấy"), system: "xmark.circle", fg: Theme.textDanger, bg: Theme.bgDanger)
             }

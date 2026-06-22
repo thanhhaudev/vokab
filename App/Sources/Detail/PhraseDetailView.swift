@@ -509,7 +509,7 @@ struct PhraseDetailView: View {
             HStack(spacing: 10) {
                 Label(L.t("Saved", "Đã lưu"), systemImage: "checkmark.circle.fill")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color(hex: 0x0F6E56))
+                    .foregroundStyle(Theme.diffIns)
                 if let app = entry.sourceApp {
                     Text("Source: \(app)\(entry.sourceURL.map { " · \($0)" } ?? "")")
                         .font(.system(size: 12)).foregroundStyle(Theme.textTertiary).lineLimit(1)

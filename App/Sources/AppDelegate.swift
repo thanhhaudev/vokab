@@ -1,14 +1,25 @@
 import AppKit
+import VokabKit
+
+/// Single source of truth for applying the appearance preference.
+enum AppearanceController {
+    static func apply(_ mode: AppearanceMode) {
+        switch mode {
+        case .system: NSApp.appearance = nil                              // follow macOS
+        case .light:  NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark:   NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
+}
 
 /// Wires AppKit-level concerns at launch: accessory activation policy, capture
 /// controller / window manager / notifications, and the Services provider.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)   // menubar agent, no Dock icon
-        // The mockup is light-only; force light appearance for faithful chrome.
-        NSApp.appearance = NSAppearance(named: .aqua)
 
         let env = AppEnvironment.shared
+        AppearanceController.apply(env?.settings.appearanceMode ?? .system)
         if let env { StatusItemController.shared.configure(env: env) }   // menubar status item + popover
         CaptureController.shared.env = env
         WindowManager.shared.env = env

@@ -10,24 +10,24 @@ enum PillStyle {
     var bg: Color {
         switch self {
         case .cefr(let level): return Self.cefrColors(level).bg
-        case .type: return Color(hex: 0xEEEDFE)
-        case .register: return Color(hex: 0xEAF3DE)
+        case .type: return Theme.accentBg
+        case .register: return Theme.successBg
         }
     }
     var fg: Color {
         switch self {
         case .cefr(let level): return Self.cefrColors(level).fg
-        case .type: return Color(hex: 0x3C3489)
-        case .register: return Color(hex: 0x27500A)
+        case .type: return Theme.accentText
+        case .register: return Theme.successFg
         }
     }
 
     /// CEFR pill color by level (A–B green, C1 blue, C2 purple) per the mockup.
     static func cefrColors(_ level: String) -> (fg: Color, bg: Color) {
         switch level.lowercased() {
-        case "c1": return (Color(hex: 0x0C447C), Color(hex: 0xE6F1FB))   // blue
-        case "c2": return (Color(hex: 0x3C3489), Color(hex: 0xEEEDFE))   // purple
-        default:   return (Color(hex: 0x27500A), Color(hex: 0xEAF3DE))   // green (A–B)
+        case "c1": return (Theme.infoFg, Theme.infoBg)            // blue
+        case "c2": return (Theme.accentText, Theme.accentBg)      // purple
+        default:   return (Theme.successFg, Theme.successBg)      // green (A–B)
         }
     }
 }
@@ -127,7 +127,15 @@ struct DueDot: View {
 // MARK: - Hairline divider
 
 struct Hairline: View {
-    var body: some View { Rectangle().fill(Theme.borderTertiary).frame(height: Theme.hairline) }
+    @Environment(\.displayScale) private var displayScale
+    var body: some View {
+        // Exactly one device pixel. A fixed 0.5pt rounds down to 0px on a
+        // scaled display whose backing scale is 1 (e.g. resolution set below
+        // native), making the line disappear. 1/displayScale is always one
+        // physical pixel — crisp everywhere, and identical to 0.5pt on Retina.
+        Rectangle().fill(Theme.borderTertiary)
+            .frame(height: 1.0 / max(displayScale, 1))
+    }
 }
 
 // MARK: - Window card container (white, hairline border, rounded)

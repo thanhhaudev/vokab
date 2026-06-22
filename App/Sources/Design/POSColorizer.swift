@@ -75,10 +75,10 @@ extension Theme {
     /// Token color for a known part of speech, or nil (render as plain text).
     static func tokenColors(_ pos: String?) -> (fg: Color, bg: Color)? {
         guard let pos = pos?.lowercased() else { return nil }
-        if pos.hasPrefix("verb") { return (Color(hex: 0x3C3489), Color(hex: 0xEEEDFE)) }
-        if pos.hasPrefix("noun") { return (Color(hex: 0x085041), Color(hex: 0xE1F5EE)) }
-        if pos.hasPrefix("prep") { return (Color(hex: 0x633806), Color(hex: 0xFAEEDA)) }
-        if pos.hasPrefix("adv")  { return (Color(hex: 0x712B13), Color(hex: 0xFAECE7)) }
+        if pos.hasPrefix("verb") { return (dyn(light: 0x3C3489, dark: 0xC8C2F5), dyn(light: 0xEEEDFE, dark: 0x2E2A52)) }
+        if pos.hasPrefix("noun") { return (dyn(light: 0x085041, dark: 0x6FD3B0), dyn(light: 0xE1F5EE, dark: 0x163A30)) }
+        if pos.hasPrefix("prep") { return (dyn(light: 0x633806, dark: 0xE0B978), dyn(light: 0xFAEEDA, dark: 0x3A3322)) }
+        if pos.hasPrefix("adv")  { return (dyn(light: 0x712B13, dark: 0xE0A48A), dyn(light: 0xFAECE7, dark: 0x3A2820)) }
         return nil
     }
 }

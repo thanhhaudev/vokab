@@ -127,7 +127,15 @@ struct DueDot: View {
 // MARK: - Hairline divider
 
 struct Hairline: View {
-    var body: some View { Rectangle().fill(Theme.borderTertiary).frame(height: Theme.hairline) }
+    @Environment(\.displayScale) private var displayScale
+    var body: some View {
+        // Exactly one device pixel. A fixed 0.5pt rounds down to 0px on a
+        // scaled display whose backing scale is 1 (e.g. resolution set below
+        // native), making the line disappear. 1/displayScale is always one
+        // physical pixel — crisp everywhere, and identical to 0.5pt on Retina.
+        Rectangle().fill(Theme.borderTertiary)
+            .frame(height: 1.0 / max(displayScale, 1))
+    }
 }
 
 // MARK: - Window card container (white, hairline border, rounded)

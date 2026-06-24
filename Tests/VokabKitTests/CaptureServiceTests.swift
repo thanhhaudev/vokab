@@ -410,4 +410,49 @@ final class CaptureServiceTests: XCTestCase {
         let id = try h.service.persistParagraphItem(item, language: "en", source: source(now))
         XCTAssertEqual(try h.entries.entry(id: id)?.rawText, "novel")
     }
+
+    func testDirtyWordDedupesAgainstCleanWord() async throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let h = try makeHarness([.respond(#"{"pos":"noun","meaning_vi":"quả táo"}"#)])
+
+        // First capture cleans "Apple," → stored rawText "Apple".
+        let first = try await h.service.capture(text: "Apple,", language: "en", source: source(now))
+        let firstId = try XCTUnwrap(first.entryId)
+        let entry = try XCTUnwrap(h.entries.entry(id: firstId))
+        XCTAssertEqual(entry.rawText, "Apple")          // case preserved, comma stripped
+
+        // Second capture of dirty lower-case variant must hit the same entry,
+        // not call agy again (only one mock step was provided).
+        let second = try await h.service.capture(text: "  apple.  ", language: "en", source: source(now))
+        XCTAssertTrue(second.wasDuplicate)
+        XCTAssertEqual(second.entryId, firstId)
+        XCTAssertEqual(try h.quota.count(on: now), 1)   // agy charged once, not twice
+    }
+
+    func testBeginCapturePurePunctuationReturnsEmpty() throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let h = try makeHarness([])                      // no agy steps needed
+        let began = try h.service.beginCapture(text: ".,;", language: "en", source: source(now))
+        XCTAssertEqual(began, .empty)
+        XCTAssertEqual(try h.entries.all().count, 0)     // nothing inserted
+    }
+
+    // MARK: - Fix 1: unified empty guard in capture(...)
+
+    func testCaptureThrowsEmptyInputForPurePunctuation() async throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let h = try makeHarness([])      // no agy steps — none should be needed
+        // ",," classifies as word/phrase; ".,;" classifies as paragraphItem (multi-sentence regex).
+        // Both must be caught by the unified word-probe guard before any agy call.
+        for junk in [",,", ".,;"] {
+            do {
+                _ = try await h.service.capture(text: junk, language: "en", source: source(now))
+                XCTFail("expected emptyInput for \"\(junk)\"")
+            } catch let e as CaptureError {
+                XCTAssertEqual(e, .emptyInput, "wrong error for \"\(junk)\"")
+            }
+        }
+        XCTAssertEqual(try h.entries.all().count, 0)      // no entry inserted
+        XCTAssertEqual(try h.quota.count(on: now), 0)     // quota not charged
+    }
 }

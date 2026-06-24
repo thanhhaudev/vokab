@@ -6,6 +6,7 @@ public enum BeganCapture: Sendable, Equatable {
     case ready(entryId: Int64, type: CardType)
     case pending(entryId: Int64, type: CardType)
     case paragraph
+    case empty
     case blocked(behavior: QuotaHitBehavior)
 }
 
@@ -39,6 +40,8 @@ public struct ParagraphFetch: Sendable, Equatable {
 public enum CaptureError: Error, Equatable, Sendable {
     /// Daily agy quota reached; `behavior` is the user's configured response.
     case quotaExceeded(behavior: QuotaHitBehavior)
+    /// Captured text was empty after cleaning (pure punctuation/whitespace).
+    case emptyInput
 }
 
 /// Orchestrates a capture: classify → dedup → cache → quota → agy → persist
@@ -69,13 +72,19 @@ public struct CaptureService: Sendable {
                         forcedType: CardType? = nil,
                         minLevelOverride: CEFR? = nil) async throws -> CaptureResult {
         let type = forcedType ?? InputClassifier.classify(text)
+        let cleaned = InputCleaner.clean(text, type: type)
         let now = source.capturedAt
+
+        // Unified emptiness guard: probe with .word semantics (strips punctuation) so that
+        // pure-punctuation inputs are rejected for ALL card types — including paragraphItem
+        // (e.g. ".,;" classifies as paragraph via multi-sentence regex but has no letters).
+        if InputCleaner.clean(text, type: .word).isEmpty { throw CaptureError.emptyInput }
 
         switch type {
         case .word, .phrase:
-            return try await captureSingle(type: type, text: text, language: language, source: source, now: now)
+            return try await captureSingle(type: type, text: cleaned, language: language, source: source, now: now)
         case .paragraphItem:
-            return try await captureParagraph(text: text, language: language,
+            return try await captureParagraph(text: cleaned, language: language,
                                               minLevel: minLevelOverride ?? settings.minParagraphLevel, now: now)
         }
     }
@@ -85,16 +94,18 @@ public struct CaptureService: Sendable {
     public func beginCapture(text: String, language: String, source: SourceContext,
                              forcedType: CardType? = nil) throws -> BeganCapture {
         let type = forcedType ?? InputClassifier.classify(text)
+        let cleaned = InputCleaner.clean(text, type: type == .paragraphItem ? .word : type)
         let now = source.capturedAt
+        guard !cleaned.isEmpty else { return .empty }
         guard type == .word || type == .phrase else { return .paragraph }
 
-        if let existing = try entries.find(rawText: text, language: language) {
+        if let existing = try entries.find(rawText: cleaned, language: language) {
             return .duplicate(entryId: existing.id ?? -1, type: existing.cardType ?? type)
         }
-        if let cached = try cache.lookup(text: text, language: language) {
+        if let cached = try cache.lookup(text: cleaned, language: language) {
             let meta = singleMeta(type: type, json: cached.aiResult)
             let category = try categories.canonicalize(meta.category, now: now)
-            let id = try persistEntry(type: type, text: text, language: language,
+            let id = try persistEntry(type: type, text: cleaned, language: language,
                                       json: cached.aiResult, cefr: meta.cefr, frequency: meta.frequency,
                                       category: category, source: source, now: now)
             return .ready(entryId: id, type: type)
@@ -102,7 +113,7 @@ public struct CaptureService: Sendable {
         let status = quotaStatus(on: now)
         if status.shouldBlock { return .blocked(behavior: settings.quotaHitBehavior) }
 
-        let entry = Entry(rawText: text, type: type.rawValue, language: language,
+        let entry = Entry(rawText: cleaned, type: type.rawValue, language: language,
                           sourceApp: source.appName, sourceURL: source.url,
                           capturedAt: now, aiResult: "{}",
                           analysisState: AnalysisState.analyzing.rawValue)
@@ -149,7 +160,7 @@ public struct CaptureService: Sendable {
     @discardableResult
     public func persistParagraphItem(_ item: ParagraphItem, language: String,
                                      source: SourceContext, sourceText: String? = nil) throws -> Int64 {
-        let word = item.word ?? ""
+        let word = InputCleaner.clean(item.word ?? "", type: .word)
         let sentence = sourceText.flatMap {
             SentenceExtractor.extractSentence(containing: word, from: $0)
         }
@@ -244,7 +255,8 @@ public struct CaptureService: Sendable {
     /// nothing — words are saved only via `persistParagraphItem`.
     public func reextractParagraph(text: String, language: String, minLevel: CEFR,
                                    now: Date = Date()) async throws -> ParagraphFetch {
-        try await fetchParagraph(text: text, language: language, minLevel: minLevel, now: now)
+        let cleaned = InputCleaner.clean(text, type: .paragraphItem)
+        return try await fetchParagraph(text: cleaned, language: language, minLevel: minLevel, now: now)
     }
 
     /// Shared cache→agy paragraph fetch. Long text is split into sentence-aligned

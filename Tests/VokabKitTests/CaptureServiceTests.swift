@@ -436,4 +436,23 @@ final class CaptureServiceTests: XCTestCase {
         XCTAssertEqual(began, .empty)
         XCTAssertEqual(try h.entries.all().count, 0)     // nothing inserted
     }
+
+    // MARK: - Fix 1: unified empty guard in capture(...)
+
+    func testCaptureThrowsEmptyInputForPurePunctuation() async throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let h = try makeHarness([])      // no agy steps — none should be needed
+        // ",," classifies as word/phrase; ".,;" classifies as paragraphItem (multi-sentence regex).
+        // Both must be caught by the unified word-probe guard before any agy call.
+        for junk in [",,", ".,;"] {
+            do {
+                _ = try await h.service.capture(text: junk, language: "en", source: source(now))
+                XCTFail("expected emptyInput for \"\(junk)\"")
+            } catch let e as CaptureError {
+                XCTAssertEqual(e, .emptyInput, "wrong error for \"\(junk)\"")
+            }
+        }
+        XCTAssertEqual(try h.entries.all().count, 0)      // no entry inserted
+        XCTAssertEqual(try h.quota.count(on: now), 0)     // quota not charged
+    }
 }

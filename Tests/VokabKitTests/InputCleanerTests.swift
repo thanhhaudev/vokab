@@ -31,4 +31,24 @@ final class InputCleanerTests: XCTestCase {
     func testCJKWordStripsIdeographicFullStop() {
         XCTAssertEqual(InputCleaner.clean("\u{732B}\u{3002}", type: .word), "\u{732B}") // 猫。 → 猫
     }
+
+    // MARK: - Fix 2: lock doc claim — math/currency symbols survive, punctuation chars are stripped
+
+    func testWordKeepsEdgeSymbols() {
+        // $ + = < > are Unicode symbols (not punctuation) → survive at edges.
+        XCTAssertEqual(InputCleaner.clean("$5", type: .word), "$5")
+        XCTAssertEqual(InputCleaner.clean("<tag>", type: .word), "<tag>")   // < > survive
+        XCTAssertEqual(InputCleaner.clean("c++", type: .word), "c++")
+        XCTAssertEqual(InputCleaner.clean("=value=", type: .word), "=value=")
+    }
+
+    func testWordStripsEdgePunctuationSymbols() {
+        // & # % @ / * are Unicode punctuation → stripped at edges.
+        XCTAssertEqual(InputCleaner.clean("&amp", type: .word), "amp")
+        XCTAssertEqual(InputCleaner.clean("#tag", type: .word), "tag")
+        XCTAssertEqual(InputCleaner.clean("%20", type: .word), "20")
+        XCTAssertEqual(InputCleaner.clean("@user", type: .word), "user")
+        XCTAssertEqual(InputCleaner.clean("/path", type: .word), "path")
+        XCTAssertEqual(InputCleaner.clean("*bold*", type: .word), "bold")
+    }
 }

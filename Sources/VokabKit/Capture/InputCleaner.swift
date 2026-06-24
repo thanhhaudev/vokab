@@ -4,10 +4,12 @@ import Foundation
 /// before dedup / cache / agy / persist (SPEC §6, §9, §11).
 ///
 /// - word / phrase: strip leading & trailing whitespace **and** Unicode
-///   punctuation (quotes, brackets, `.,;:!?…`, hyphen, `#`, `¿¡`, smart
+///   punctuation (quotes, brackets, `.,;:!?…`, hyphen, `¿¡`, smart
 ///   quotes), then collapse internal whitespace to single spaces. Case is
 ///   preserved; internal punctuation (`don't`, `co-op`) is untouched. Symbols
-///   (`$ + = < >`) are NOT punctuation and survive at the edges.
+///   (`$ + = < >`) are NOT punctuation and survive at the edges. Note: `&`,
+///   `#`, `%`, `@`, `/`, `*` **are** Unicode punctuation and ARE stripped at
+///   the edges (unlike the math/currency symbols `$ + = < >`).
 /// - paragraph: only whitespace-trim the edges — punctuation is needed for
 ///   sentence splitting downstream.
 ///

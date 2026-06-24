@@ -75,9 +75,13 @@ public struct CaptureService: Sendable {
         let cleaned = InputCleaner.clean(text, type: type)
         let now = source.capturedAt
 
+        // Unified emptiness guard: probe with .word semantics (strips punctuation) so that
+        // pure-punctuation inputs are rejected for ALL card types — including paragraphItem
+        // (e.g. ".,;" classifies as paragraph via multi-sentence regex but has no letters).
+        if InputCleaner.clean(text, type: .word).isEmpty { throw CaptureError.emptyInput }
+
         switch type {
         case .word, .phrase:
-            guard !cleaned.isEmpty else { throw CaptureError.emptyInput }
             return try await captureSingle(type: type, text: cleaned, language: language, source: source, now: now)
         case .paragraphItem:
             return try await captureParagraph(text: cleaned, language: language,

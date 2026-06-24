@@ -45,6 +45,10 @@ final class CaptureController: ObservableObject {
         guard let env else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        // Pure-punctuation selections (e.g. ",,," or "...") clean to nothing —
+        // skip before showing a toast (matches CaptureService.beginCapture .empty).
+        let probeType = forcedType ?? InputClassifier.classify(trimmed)
+        if probeType != .paragraphItem, InputCleaner.clean(trimmed, type: probeType).isEmpty { return }
 
         ToastCenter.shared.corner = env.settings.toastPosition
         let model = ToastCenter.shared.present()
@@ -142,6 +146,9 @@ final class CaptureController: ObservableObject {
 
                 case .blocked(let behavior):
                     model.phase = .error("Daily quota reached (\(behavior.rawValue)).")
+
+                case .empty:
+                    ToastCenter.shared.dismiss(model)
                 }
             } catch let CaptureError.quotaExceeded(behavior) {
                 model.phase = .error("Daily quota reached (\(behavior.rawValue)).")
@@ -171,7 +178,7 @@ final class CaptureController: ObservableObject {
                     added += 1
                 case .duplicate:
                     dupes += 1
-                case .paragraph, .blocked:
+                case .paragraph, .blocked, .empty:
                     break
                 }
             } catch { }

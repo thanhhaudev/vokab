@@ -2,14 +2,11 @@ import Foundation
 
 /// Normalization used for cache keys and dedup lookups (SPEC §9, §11).
 public enum TextKey {
-    /// Lowercased, whitespace-trimmed, internal whitespace collapsed.
+    /// Lowercased; edge whitespace **and** punctuation trimmed; internal
+    /// whitespace collapsed. Mirrors `InputCleaner.clean(_:type:.word)` so the
+    /// dedup/cache key matches the cleaned `rawText` stored at capture time.
     public static func normalize(_ text: String) -> String {
-        text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-            .components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
+        InputCleaner.clean(text, type: .word).lowercased()
     }
 
     /// Cache/dedup key combining normalized text and language.

@@ -13,11 +13,11 @@ public final class AntigravityQuotaClient: Sendable {
     let transport: Transport
     let now: @Sendable () -> Date
 
-    public init(transport: @escaping Transport, now: @escaping @Sendable () -> Date = Date.init) {
+    public init(transport: @escaping Transport, now: @escaping @Sendable () -> Date = { Date() }) {
         self.transport = transport; self.now = now
     }
 
-    public static func live(now: @escaping @Sendable () -> Date = Date.init) -> AntigravityQuotaClient {
+    public static func live(now: @escaping @Sendable () -> Date = { Date() }) -> AntigravityQuotaClient {
         let session = permissiveSession
         return AntigravityQuotaClient(transport: { try await session.data(for: $0) }, now: now)
     }

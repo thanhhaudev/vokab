@@ -16,7 +16,14 @@ public actor BatchEnricher {
     private let fallback: EnrichmentService
     private let language: String
     private let onChange: (@Sendable () -> Void)?
-    private var coalescer: JobCoalescer<Int64>!
+    private let maxBatch: Int
+    private let window: TimeInterval
+    /// Built lazily on first use (inside actor isolation) so the self-capturing
+    /// flush closure isn't created in the nonisolated initializer — which is a hard
+    /// error under the Swift 6 language mode.
+    private lazy var coalescer = JobCoalescer<Int64>(maxBatch: maxBatch, window: window) { [weak self] ids in
+        await self?.flush(ids)
+    }
 
     /// - Parameter onChange: called after each entry is enriched (batch or
     ///   fallback) so the UI can refresh. Safe to call from a background context.
@@ -28,9 +35,8 @@ public actor BatchEnricher {
         self.fallback = fallback
         self.language = "en"
         self.onChange = onChange
-        self.coalescer = JobCoalescer(maxBatch: maxBatch, window: window) { [weak self] ids in
-            await self?.flush(ids)
-        }
+        self.maxBatch = maxBatch
+        self.window = window
     }
 
     /// Schedules background enrichment for one WORD entry id. Coalesces with other
@@ -93,7 +99,7 @@ public actor BatchEnricher {
             if let a { card = card.merging(a) }
             if let b { card = card.merging(b) }
             if let json = try? encode(card) {
-                try? entries.markEnriched(id: id, aiResult: json)
+                _ = try? entries.markEnriched(id: id, aiResult: json)
                 onChange?()
             }
         }

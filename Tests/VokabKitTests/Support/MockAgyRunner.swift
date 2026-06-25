@@ -38,20 +38,20 @@ final class MockAgyRunner: AgyRunner, @unchecked Sendable {
     }
 
     func run(prompt: String, model: String?) async throws -> String {
-        lock.lock()
-        receivedPrompts.append(prompt)
-        let step: Step?
-        if let router {
-            step = router(prompt)
-        } else {
-            step = steps.isEmpty ? nil : steps.removeFirst()
-        }
-        lock.unlock()
-
+        let step = recordAndNextStep(prompt)   // sync (locked) — keep the lock out of the async context
         switch step {
         case .respond(let s): return s
         case .fail(let e): throw e
         case nil: throw AgyError.nonZeroExit(code: 1, stderr: "mock exhausted")
         }
+    }
+
+    /// Records the prompt and returns the next step under the lock. Synchronous so
+    /// the NSLock is never held across an async suspension point.
+    private func recordAndNextStep(_ prompt: String) -> Step? {
+        lock.lock(); defer { lock.unlock() }
+        receivedPrompts.append(prompt)
+        if let router { return router(prompt) }
+        return steps.isEmpty ? nil : steps.removeFirst()
     }
 }

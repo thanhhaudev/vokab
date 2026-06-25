@@ -125,8 +125,10 @@ struct BatchCaptureView: View {
 
     /// Detects each line's language, groups by language, then does ONE batch DB
     /// lookup per language. Returns the normalized keys already in the library.
-    private static func existingSaved(_ lines: [String], entries: EntryRepository,
-                                      fallback: String) -> Set<String> {
+    /// `nonisolated` so it actually runs off the main actor in `Task.detached`
+    /// (the View is `@MainActor`, which would otherwise hop this back on-main).
+    nonisolated private static func existingSaved(_ lines: [String], entries: EntryRepository,
+                                                  fallback: String) -> Set<String> {
         var byLang: [String: [String]] = [:]
         for line in lines {
             let lang = LanguageDetector.detect(line, default: fallback)

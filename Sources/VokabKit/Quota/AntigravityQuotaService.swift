@@ -15,7 +15,7 @@ public actor AntigravityQuotaService {
     private var cachedAt: Date?
 
     public init(detect: @escaping Detect, fetch: @escaping Fetch, spawnFetch: @escaping SpawnFetch,
-                now: @escaping @Sendable () -> Date = Date.init, ttl: TimeInterval = 60,
+                now: @escaping @Sendable () -> Date = { Date() }, ttl: TimeInterval = 60,
                 minRefreshInterval: TimeInterval = 10) {
         self.detect = detect; self.fetch = fetch; self.spawnFetch = spawnFetch
         self.now = now; self.ttl = ttl; self.minRefreshInterval = minRefreshInterval

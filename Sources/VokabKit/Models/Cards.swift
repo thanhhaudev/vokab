@@ -12,7 +12,7 @@ import Foundation
 private func decodeArray(_ container: KeyedDecodingContainer<GenericKey>, _ key: String) -> [String] {
     let k = GenericKey(stringValue: key)!
     if let value = try? container.decodeIfPresent([String].self, forKey: k) {
-        return value ?? []
+        return value
     }
     return []
 }
@@ -320,7 +320,7 @@ public struct ProductionFeedback: Codable, Sendable, Equatable {
         correctedSentence = decodeString(c, "correctedSentence")
         let diffKey = GenericKey(stringValue: "diff")!
         if let value = try? c.decodeIfPresent([DiffToken].self, forKey: diffKey) {
-            diff = value ?? []
+            diff = value
         } else {
             diff = []
         }

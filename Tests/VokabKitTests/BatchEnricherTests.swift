@@ -11,10 +11,12 @@ final class BatchEnricherTests: XCTestCase {
     private final class RoutingRunner: AgyRunner, @unchecked Sendable {
         private let lock = NSLock()
         private(set) var receivedPrompts: [String] = []
-        /// Predicate → response. First matching entry wins.
-        private let routes: [(@Sendable (String) -> Bool, String)]
+        /// Predicate → response. First matching entry wins. Predicates are pure
+        /// (capture nothing) and only read, so the @unchecked Sendable class owns
+        /// their thread-safety — no @Sendable annotation needed at the call site.
+        private let routes: [((String) -> Bool, String)]
 
-        init(routes: [(@Sendable (String) -> Bool, String)]) { self.routes = routes }
+        init(routes: [((String) -> Bool, String)]) { self.routes = routes }
 
         var prompts: [String] { lock.lock(); defer { lock.unlock() }; return receivedPrompts }
 
@@ -24,12 +26,14 @@ final class BatchEnricherTests: XCTestCase {
         var singleCallCount: Int { prompts.filter { !$0.contains("For EACH of these words") }.count }
 
         func run(prompt: String, model: String?) async throws -> String {
-            lock.lock(); receivedPrompts.append(prompt); lock.unlock()
+            record(prompt)   // sync (locked) — keep the lock out of the async context
             for (matches, response) in routes where matches(prompt) {
                 return response
             }
             throw AgyError.nonZeroExit(code: 1, stderr: "no route for prompt: \(prompt.prefix(60))")
         }
+
+        private func record(_ prompt: String) { lock.lock(); receivedPrompts.append(prompt); lock.unlock() }
     }
 
     /// A typed word whose core fields are present → "batchable" (no core fetch).

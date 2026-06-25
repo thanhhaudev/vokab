@@ -369,7 +369,7 @@ struct ParagraphExtractionView: View {
                 })
             }
             .buttonStyle(.vSecondary)
-            Button(L.t("Save \(selected.count) words", "Lưu \(selected.count) từ")) { addSelected() }
+            Button(L.t("Save \(selected.count) items", "Lưu \(selected.count) mục")) { addSelected() }
                 .buttonStyle(.vPrimary).disabled(selected.isEmpty)
         }
         .padding(14).background(Theme.bgSecondary)

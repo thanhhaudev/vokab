@@ -157,14 +157,17 @@ public struct CaptureService: Sendable {
         }
     }
 
-    /// Persists a chosen paragraph item as a first-class **word** entry (seeded
-    /// with the item's partial fields) so it gets the same detail + enrichment as
-    /// a typed word. Background prep fills the rest (see EnrichmentService).
+    /// Persists a chosen paragraph item as a first-class **word or phrase** entry,
+    /// classified from the item text and seeded with its partial fields, so it gets
+    /// the matching detail view + enrichment. Background prep fills the rest.
     /// Returns the new entry id.
     @discardableResult
     public func persistParagraphItem(_ item: ParagraphItem, language: String,
                                      source: SourceContext, sourceText: String? = nil) throws -> Int64 {
-        let word = InputCleaner.clean(item.word ?? "", type: .word)
+        // Multi-word items (e.g. "in parallel") are phrases, not words — store the
+        // right type so they get phrase cards + enrichment + PhraseDetailView.
+        let type: CardType = InputClassifier.classify(item.word ?? "") == .word ? .word : .phrase
+        let word = InputCleaner.clean(item.word ?? "", type: type)
         let sentence = sourceText.flatMap {
             SentenceExtractor.extractSentence(containing: word, from: $0)
         }
@@ -176,9 +179,10 @@ public struct CaptureService: Sendable {
                 sourceApp: source.appName, sourceURL: source.url)
             return id
         }
-        // Build a partial WordCard JSON (snake_case keys, decoded leniently later).
+        // Partial card JSON (snake_case keys, decoded leniently later). `pos` only
+        // applies to words; PhraseCard has none (enrichment fills its type/pattern).
         var fields: [String: String] = [:]
-        if let p = item.pos { fields["pos"] = p }
+        if type == .word, let p = item.pos { fields["pos"] = p }
         if let m = item.meaning {
             fields["meaning"] = m
             fields["meaning_lang"] = item.meaningLang ?? settings.meaningLanguage
@@ -188,7 +192,7 @@ public struct CaptureService: Sendable {
         let json = (try? encode(fields)) ?? "{}"
         let category = try categories.canonicalize(item.category)
         let entry = Entry(rawText: word,
-                          type: CardType.word.rawValue,
+                          type: type.rawValue,
                           language: language,
                           sourceApp: source.appName,
                           sourceURL: source.url,

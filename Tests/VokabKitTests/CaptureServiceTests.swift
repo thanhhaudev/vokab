@@ -253,6 +253,25 @@ final class CaptureServiceTests: XCTestCase {
         XCTAssertNil(try XCTUnwrap(h.entries.entry(id: id)).captureSentence)
     }
 
+    func testPersistParagraphItemClassifiesWordVsPhrase() async throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let h = try makeHarness([.respond(#"{"items":[{"word":"in parallel","cefr":"B2","meaning":"song song"},{"word":"dispatch","pos":"verb","cefr":"B2"}]}"#)])
+        let text = "We dispatch the review in parallel. It runs fast."
+        let result = try await h.service.capture(text: text, language: "en", source: source(now))
+
+        // Multi-word item → phrase entry (gets phrase card + phrase enrichment + PhraseDetailView).
+        let phraseItem = try XCTUnwrap(result.paragraphItems.first { $0.word == "in parallel" })
+        let pid = try h.service.persistParagraphItem(phraseItem, language: "en", source: source(now))
+        let phrase = try XCTUnwrap(h.entries.entry(id: pid))
+        XCTAssertEqual(phrase.cardType, .phrase)
+        XCTAssertEqual(try JSONCleaning.decode(PhraseCard.self, from: phrase.aiResult).meaning, "song song")
+
+        // Single-word item → word entry.
+        let wordItem = try XCTUnwrap(result.paragraphItems.first { $0.word == "dispatch" })
+        let wid = try h.service.persistParagraphItem(wordItem, language: "en", source: source(now))
+        XCTAssertEqual(try XCTUnwrap(h.entries.entry(id: wid)).cardType, .word)
+    }
+
     // MARK: - QuotaStatus (warn-only vs hard-block)
 
     private func makeCaptureAndQuota(settings: VokabSettings) throws -> (CaptureService, QuotaRepository) {

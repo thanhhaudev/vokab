@@ -16,23 +16,40 @@ public struct AgyService: Sendable {
         self.activity = activity
     }
 
+    /// English display name of the user's meaning language, woven into every
+    /// definition prompt so the gloss comes back in that language.
+    private var meaningLanguageName: String { TranslationService.languageName(settings.meaningLanguage) }
+
+    /// Tags a freshly-defined card with the meaning language it was requested in, so
+    /// the stored gloss carries its language (agy returns an untagged `meaning`).
+    private func tagged(_ card: WordCard) -> WordCard {
+        guard card.meaning?.isEmpty == false else { return card }
+        var c = card; c.meaningLang = settings.meaningLanguage; return c
+    }
+    private func tagged(_ card: PhraseCard) -> PhraseCard {
+        guard card.meaning?.isEmpty == false else { return card }
+        var c = card; c.meaningLang = settings.meaningLanguage; return c
+    }
+
     public func defineWord(_ word: String, language: String) async throws -> WordCard {
-        try await callAndDecode(WordCard.self, prompt: PromptTemplates.word(word, language: language))
+        tagged(try await callAndDecode(WordCard.self,
+            prompt: PromptTemplates.word(word, language: language, meaningLanguage: meaningLanguageName)))
     }
 
     public func analyzePhrase(_ phrase: String) async throws -> PhraseCard {
-        try await callAndDecode(PhraseCard.self, prompt: PromptTemplates.phrase(phrase))
+        tagged(try await callAndDecode(PhraseCard.self,
+            prompt: PromptTemplates.phrase(phrase, meaningLanguage: meaningLanguageName)))
     }
 
     // MARK: Two-tier (core capture + lazy enrichment)
 
     public func defineWordCore(_ word: String, language: String, taxonomy: [String]) async throws -> WordCard {
-        try await callAndDecode(WordCard.self,
-            prompt: PromptTemplates.wordCore(word, language: language, taxonomy: taxonomy))
+        tagged(try await callAndDecode(WordCard.self,
+            prompt: PromptTemplates.wordCore(word, language: language, meaningLanguage: meaningLanguageName, taxonomy: taxonomy)))
     }
     public func analyzePhraseCore(_ phrase: String, taxonomy: [String]) async throws -> PhraseCard {
-        try await callAndDecode(PhraseCard.self,
-            prompt: PromptTemplates.phraseCore(phrase, taxonomy: taxonomy))
+        tagged(try await callAndDecode(PhraseCard.self,
+            prompt: PromptTemplates.phraseCore(phrase, meaningLanguage: meaningLanguageName, taxonomy: taxonomy)))
     }
 
     /// Classify-only call for lazy backfill. Returns nil if agy omits a category.
@@ -93,8 +110,17 @@ public struct AgyService: Sendable {
     }
 
     public func extractFromParagraph(_ paragraph: String, minLevel: CEFR, taxonomy: [String]) async throws -> ParagraphExtraction {
-        try await callAndDecode(ParagraphExtraction.self,
-                                prompt: PromptTemplates.paragraph(paragraph, minLevel: minLevel, taxonomy: taxonomy))
+        let ex = try await callAndDecode(ParagraphExtraction.self,
+                                prompt: PromptTemplates.paragraph(paragraph, minLevel: minLevel,
+                                                                  meaningLanguage: meaningLanguageName, taxonomy: taxonomy))
+        // Tag each item's gloss with the meaning language it was requested in.
+        let code = settings.meaningLanguage
+        var tagged = ex
+        tagged.items = ex.items.map { item in
+            guard item.meaning?.isEmpty == false else { return item }
+            var i = item; i.meaningLang = code; return i
+        }
+        return tagged
     }
 
     public func translate(_ text: String, to language: String) async throws -> String? {

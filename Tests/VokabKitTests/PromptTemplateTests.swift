@@ -3,8 +3,9 @@ import XCTest
 
 final class PromptTemplateTests: XCTestCase {
     func testWordCoreOmitsEnrichFields() {
-        let p = PromptTemplates.wordCore("x", language: "en", taxonomy: [])
-        XCTAssertTrue(p.contains("meaning_vi"))
+        let p = PromptTemplates.wordCore("x", language: "en", meaningLanguage: "Vietnamese", taxonomy: [])
+        XCTAssertTrue(p.contains("meaning_en"))    // meaning fields present
+        XCTAssertFalse(p.contains("meaning_vi"))   // generic `meaning`, not hardcoded vi
         XCTAssertFalse(p.contains("etymology"))
         XCTAssertFalse(p.contains("synonyms"))
         XCTAssertFalse(p.contains("word_family"))
@@ -21,14 +22,14 @@ final class PromptTemplateTests: XCTestCase {
     }
 
     func testPhraseCoreOmitsEnrichFields() {
-        let p = PromptTemplates.phraseCore("x", taxonomy: [])
+        let p = PromptTemplates.phraseCore("x", meaningLanguage: "Vietnamese", taxonomy: [])
         XCTAssertFalse(p.contains("variations"))
         XCTAssertFalse(p.contains("common_errors"))
         XCTAssertTrue(p.contains("formula_pattern"))
     }
 
     func testWordCorePromptIncludesCategoryAndTaxonomy() {
-        let p = PromptTemplates.wordCore("router", language: "en", taxonomy: ["Technology", "Science"])
+        let p = PromptTemplates.wordCore("router", language: "en", meaningLanguage: "Vietnamese", taxonomy: ["Technology", "Science"])
         XCTAssertTrue(p.contains("category"))
         XCTAssertTrue(p.contains("Technology, Science"))
         XCTAssertTrue(p.contains("only invent a new one"))
@@ -103,22 +104,22 @@ final class PromptTemplateTests: XCTestCase {
     }
 
     func test_categoryPrompts_hintHumanReadable() {
-        let p = PromptTemplates.wordCore("stubborn", language: "en", taxonomy: ["Technology"])
+        let p = PromptTemplates.wordCore("stubborn", language: "en", meaningLanguage: "Vietnamese", taxonomy: ["Technology"])
         XCTAssertTrue(p.contains("Title Case") || p.lowercased().contains("human-readable"))
         let c = PromptTemplates.classify("stubborn", language: "en", taxonomy: ["Technology"])
         XCTAssertTrue(c.contains("Title Case") || c.lowercased().contains("human-readable"))
     }
 
-    func testParagraphPromptDemandsObjectWithTranslation() {
-        let p = PromptTemplates.paragraph("Some text.", minLevel: .b1, taxonomy: ["Business"])
-        XCTAssertTrue(p.contains("translation_vi"))
+    func testParagraphPromptReturnsItemsOnly() {
+        let p = PromptTemplates.paragraph("Some text.", minLevel: .b1, meaningLanguage: "Vietnamese", taxonomy: ["Business"])
+        XCTAssertFalse(p.contains("translation_vi"))   // translation is fetched separately now
         XCTAssertTrue(p.contains("\"items\""))
         XCTAssertTrue(p.contains("B1"))
         XCTAssertTrue(p.contains("Business"))
     }
 
     func testParagraphPromptIsExhaustive() {
-        let p = PromptTemplates.paragraph("Some text.", minLevel: .a1, taxonomy: [])
+        let p = PromptTemplates.paragraph("Some text.", minLevel: .a1, meaningLanguage: "Vietnamese", taxonomy: [])
         XCTAssertTrue(p.lowercased().contains("every"))     // list EVERY word
         XCTAssertTrue(p.lowercased().contains("do not"))    // do not cap / omit
     }

@@ -20,6 +20,10 @@ final class AppEnvironment: ObservableObject {
     private var pulseTimer: Timer?
     private var pulseTick = 0
     let dbQueue: DatabaseQueue
+    /// False when the on-disk database couldn't be opened and we fell back to an
+    /// in-memory database (data is lost on quit). The UI surfaces a banner so the
+    /// user isn't silently capturing into a throwaway store.
+    let isPersistent: Bool
     let entries: EntryRepository
     let review: ReviewRepository
     let reviewLog: ReviewLogRepository
@@ -41,9 +45,10 @@ final class AppEnvironment: ObservableObject {
     private let agyActivity: AgyActivity
     private var redQuotaGate = RedNotificationGate()
 
-    init(queue: DatabaseQueue, settings: VokabSettings) {
+    init(queue: DatabaseQueue, settings: VokabSettings, isPersistent: Bool = true) {
         self.settings = settings
         self.dbQueue = queue
+        self.isPersistent = isPersistent
         let entries = EntryRepository(dbQueue: queue)
         let cache = CacheRepository(dbQueue: queue)
         let quota = QuotaRepository(dbQueue: queue)
@@ -174,7 +179,8 @@ final class AppEnvironment: ObservableObject {
             } else {
                 queue = try! DatabaseQueue()
             }
-            env = AppEnvironment(queue: queue, settings: SettingsStore.load())
+            // In-memory fallback: the app runs but captures won't survive a quit.
+            env = AppEnvironment(queue: queue, settings: SettingsStore.load(), isPersistent: false)
         }
         AppEnvironment.shared = env
         let prettifyFlagKey = "vokab.categoryPrettifyBackfill.v1"

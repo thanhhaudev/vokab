@@ -19,7 +19,7 @@ final class PhraseErrorBackfillerTests: XCTestCase {
 
         let card = try JSONCleaning.decode(PhraseCard.self, from: entries.entry(id: id)!.aiResult)
         XCTAssertEqual(card.commonErrors.first?.answer, "on")
-        XCTAssertEqual(card.meaningVi, "từ bỏ")
+        XCTAssertEqual(card.meaning, "từ bỏ")
     }
 
     func testSkipsWord() async throws {

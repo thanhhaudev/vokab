@@ -25,6 +25,7 @@ struct ParagraphExtractionView: View {
     @State private var selected: Set<String> = []           // normalized word keys
     @State private var savedSet: Set<String> = []           // normalized words already in library
     @State private var working = false
+    @State private var translating = false   // background whole-passage translation in flight
     @State private var errorText: String?
     @State private var warningText: String?
     @State private var translationExpanded = true
@@ -36,9 +37,20 @@ struct ParagraphExtractionView: View {
     private let translationMaxHeight: CGFloat = 140
 
     init(items: [ParagraphItem], translationVi: String? = nil, failedChunks: Int = 0,
+         initialSavedSet: Set<String> = [],
          source: SourceContext, language: String,
          rawText: String, onClose: @escaping () -> Void) {
         _allItems = State(initialValue: items)
+        // Seed savedSet (and the dedup-aware default selection) BEFORE the first
+        // render. If savedSet were left empty until onAppear, library words would
+        // render as interactive `selectableRow` Buttons on the first frame; when
+        // they later switch to `savedRow`, LazyVStack retains the stale Button's
+        // tap action, so tapping an "Already in library" row still inserts its key
+        // into `selected`. Computing it eagerly (caller has `env`) avoids that
+        // transient entirely. (See WindowManager.showExtraction.)
+        _savedSet = State(initialValue: initialSavedSet)
+        _selected = State(initialValue:
+            ParagraphSelection.defaultSelection(items: items, existingNormalized: initialSavedSet))
         _translationViState = State(initialValue: translationVi)
         // The initial items were extracted at minLevel (default .b1); anything lower
         // hasn't been fetched yet. Use .b1 as the default lowestFetched to match
@@ -94,6 +106,25 @@ struct ParagraphExtractionView: View {
             minLevel = lvl
             lowestFetched = lvl
             recomputeSavedSet()
+            loadTranslationIfNeeded()
+        }
+    }
+
+    /// Fetches the whole-passage translation in the background (extraction no longer
+    /// returns it inline, so the item list renders immediately). No-op if a
+    /// translation is already present or the meaning language is English.
+    private func loadTranslationIfNeeded() {
+        guard translationViState == nil, !translating else { return }
+        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        let code = env.settings.meaningLanguage
+        translating = true
+        Task {
+            let tv = try? await env.translation.translate(text, to: code)
+            await MainActor.run {
+                translating = false
+                if let tv, !tv.isEmpty { translationViState = tv }
+            }
         }
     }
 
@@ -111,6 +142,11 @@ struct ParagraphExtractionView: View {
 
             if let tv = translationViState, !tv.isEmpty {
                 translationBlock(tv)
+            } else if translating {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    SecLabel(L.t("Translating…", "Đang dịch…"))
+                }
             }
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
@@ -254,6 +290,10 @@ struct ParagraphExtractionView: View {
         let key = TextKey.normalize(item.word ?? "")
         let on = selected.contains(key)
         return Button {
+            // Invariant: a library word can never be selected. Guards against a
+            // stale Button lingering from a first-render transition (defense in
+            // depth — the eager savedSet seeding should already prevent it).
+            guard !savedSet.contains(key) else { return }
             if on { selected.remove(key) } else { selected.insert(key) }
         } label: {
             HStack(alignment: .top, spacing: 10) {
@@ -265,7 +305,7 @@ struct ParagraphExtractionView: View {
                         Text(item.word ?? "").font(.system(size: 14, weight: .medium))
                             .foregroundStyle(Theme.textPrimary)
                         if let c = item.cefr { Pill.cefr(c) }
-                        if let m = item.meaningVi {
+                        if let m = item.meaning {
                             Text("— \(m)").font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineLimit(1)
                         }
                     }
@@ -301,7 +341,7 @@ struct ParagraphExtractionView: View {
                     Text(item.word ?? "").font(.system(size: 14, weight: .medium))
                         .foregroundStyle(Theme.textSecondary)
                     if let c = item.cefr { Pill.cefr(c) }
-                    if let m = item.meaningVi {
+                    if let m = item.meaning {
                         Text("— \(m)").font(.system(size: 13)).foregroundStyle(Theme.textTertiary).lineLimit(1)
                     }
                 }
@@ -350,9 +390,15 @@ struct ParagraphExtractionView: View {
     }
 
     private func recomputeSavedSet() {
-        savedSet = buildSavedSet()
+        // Seed from the freshly-computed local, NOT the @State `savedSet`: a @State
+        // write isn't reflected in an immediate synchronous read here, so reading
+        // `savedSet` back would hand defaultSelection a stale empty set and pre-select
+        // every word — including library words, which then count toward the footer
+        // and get saved as duplicates. (changeMinLevel uses the same local pattern.)
+        let saved = buildSavedSet()
+        savedSet = saved
         // Seed selection: all new words not yet in library
-        selected = ParagraphSelection.defaultSelection(items: allItems, existingNormalized: savedSet)
+        selected = ParagraphSelection.defaultSelection(items: allItems, existingNormalized: saved)
     }
 
     private func changeMinLevel(_ lvl: CEFR) {

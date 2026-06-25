@@ -9,7 +9,7 @@ final class TwoTierTests: XCTestCase {
         let agy = AgyService(runner: AgyClient(settings: settings), settings: settings)
 
         let core = try await agy.defineWordCore("serendipity", language: "en", taxonomy: [])
-        XCTAssertTrue((core.meaningVi?.isEmpty == false) || (core.meaningEn?.isEmpty == false),
+        XCTAssertTrue((core.meaning?.isEmpty == false) || (core.meaningEn?.isEmpty == false),
                       "core should have a meaning")
 
         async let extras = agy.enrichWordExtras("serendipity", language: "en")

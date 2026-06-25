@@ -5,34 +5,36 @@ import Foundation
 public enum PromptTemplates {
 
     /// Single word (SPEC §7a).
-    public static func word(_ word: String, language: String) -> String {
+    public static func word(_ word: String, language: String, meaningLanguage: String) -> String {
         """
         Define '\(word)' (language: \(language)). Return ONLY JSON:
-        {ipa, pos, meaning_vi, meaning_en, examples[], etymology,
+        {ipa, pos, meaning, meaning_en, examples[], etymology,
          cefr_level, register, frequency, synonyms[], antonyms[], word_family[]}
+        "meaning" = the definition in \(meaningLanguage); "meaning_en" = the definition in English.
         No preamble, no markdown fence.
         """
     }
 
     /// Phrase / idiom (SPEC §7b).
-    public static func phrase(_ phrase: String) -> String {
+    public static func phrase(_ phrase: String, meaningLanguage: String) -> String {
         """
         Analyze the phrase '\(phrase)'. Return ONLY JSON:
-        {type, formula_pattern, pattern_confidence, meaning_vi, meaning_en,
+        {type, formula_pattern, pattern_confidence, meaning, meaning_en,
          register, cefr_level, separable, object_type, usage_note,
          examples[], variations[], common_errors[], related_phrases[]}
+        "meaning" = the definition in \(meaningLanguage); "meaning_en" = the definition in English.
         No preamble, no markdown fence.
         """
     }
 
-    /// Paragraph extraction (SPEC §7c) — returns a learner-language translation of
-    /// the whole passage plus an exhaustive list of worth-learning items, each with
-    /// a category.
-    public static func paragraph(_ paragraph: String, minLevel: CEFR, taxonomy: [String]) -> String {
+    /// Paragraph extraction (SPEC §7c) — returns an exhaustive list of
+    /// worth-learning items, each with a category. The whole-passage translation is
+    /// fetched separately/in the background so the item list can render immediately.
+    public static func paragraph(_ paragraph: String, minLevel: CEFR, meaningLanguage: String, taxonomy: [String]) -> String {
         """
-        Analyze this text for a Vietnamese learner of English. Return ONLY JSON:
-        {"translation_vi": "<full Vietnamese translation of the whole text>",
-         "items": [{word, cefr, pos, meaning_vi, reason_to_learn, category}]}
+        Analyze this text for a \(meaningLanguage)-speaking learner of English. Return ONLY JSON:
+        {"items": [{word, cefr, pos, meaning, reason_to_learn, category}]}
+        "meaning" = the word's meaning in \(meaningLanguage).
 
         For "items": list EVERY word or short phrase worth learning at CEFR \(minLevel.rawValue.uppercased()) or above.
         Be exhaustive — do NOT cap the count, do NOT omit items, do NOT summarize.
@@ -60,10 +62,11 @@ public enum PromptTemplates {
 
     /// Word — core fields only (capture, fast). Carries the current taxonomy so
     /// agy reuses existing categories before inventing one (Phase 2).
-    public static func wordCore(_ word: String, language: String, taxonomy: [String]) -> String {
+    public static func wordCore(_ word: String, language: String, meaningLanguage: String, taxonomy: [String]) -> String {
         """
         Define '\(word)' (language: \(language)). Return ONLY JSON:
-        {ipa, pos, meaning_vi, meaning_en, cefr_level, register, examples[], category}
+        {ipa, pos, meaning, meaning_en, cefr_level, register, examples[], category}
+        "meaning" = the definition in \(meaningLanguage); "meaning_en" = the definition in English.
         Give exactly one short example.
         For "category": prefer reusing one of [\(taxonomy.joined(separator: ", "))]; only invent a new one if none fits.
         Category MUST be human-readable Title Case (e.g. "Social media"), never snake_case or kebab-case.
@@ -140,10 +143,11 @@ public enum PromptTemplates {
     }
 
     /// Phrase — core fields only (capture).
-    public static func phraseCore(_ phrase: String, taxonomy: [String]) -> String {
+    public static func phraseCore(_ phrase: String, meaningLanguage: String, taxonomy: [String]) -> String {
         """
         Analyze the phrase '\(phrase)'. Return ONLY JSON:
-        {type, formula_pattern, pattern_confidence, meaning_vi, meaning_en, register, cefr_level, examples[], category}
+        {type, formula_pattern, pattern_confidence, meaning, meaning_en, register, cefr_level, examples[], category}
+        "meaning" = the definition in \(meaningLanguage); "meaning_en" = the definition in English.
         Give exactly one short example.
         For "category": prefer reusing one of [\(taxonomy.joined(separator: ", "))]; only invent a new one if none fits.
         Category MUST be human-readable Title Case (e.g. "Social media"), never snake_case or kebab-case.

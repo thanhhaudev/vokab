@@ -16,7 +16,7 @@ final class AgyContractTests: XCTestCase {
         try IntegrationGate.skipUnlessEnabled()
         let card = try await makeService().defineWord("ephemeral", language: "en")
         // At least one meaning should be present; pos is expected for a word.
-        XCTAssertTrue((card.meaningVi?.isEmpty == false) || (card.meaningEn?.isEmpty == false),
+        XCTAssertTrue((card.meaning?.isEmpty == false) || (card.meaningEn?.isEmpty == false),
                       "expected a meaning in word card")
         XCTAssertNotNil(card.pos)
     }
@@ -24,7 +24,7 @@ final class AgyContractTests: XCTestCase {
     func testPhraseContract() async throws {
         try IntegrationGate.skipUnlessEnabled()
         let card = try await makeService().analyzePhrase("give up on")
-        XCTAssertTrue((card.meaningVi?.isEmpty == false) || (card.meaningEn?.isEmpty == false),
+        XCTAssertTrue((card.meaning?.isEmpty == false) || (card.meaningEn?.isEmpty == false),
                       "expected a meaning in phrase card")
     }
 

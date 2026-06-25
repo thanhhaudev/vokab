@@ -32,6 +32,24 @@ private func decodeBool(_ container: KeyedDecodingContainer<GenericKey>, _ key: 
     return (try? container.decodeIfPresent(Bool.self, forKey: k)) ?? nil
 }
 
+/// Picks the gloss to display for the active meaning language `code`. Prefers a
+/// `meaning` tagged for that language (or untagged — assumed to match what was
+/// requested at capture), otherwise falls back to the English reference. Never
+/// shows a gloss in the wrong language (e.g. a legacy Vietnamese entry while the
+/// user is in Spanish mode → English).
+func resolveMeaning(meaning: String?, lang: String?, meaningEn: String?, for code: String) -> String? {
+    func nonEmpty(_ s: String?) -> String? { (s?.isEmpty == false) ? s : nil }
+    // `meaning` is usable for the active language only when its tag matches (or is
+    // absent — a fresh gloss is assumed to be in the language it was requested in).
+    let matches = (lang == nil || lang == code)
+    if code == "en" {
+        return nonEmpty(meaningEn) ?? (matches ? nonEmpty(meaning) : nil)
+    }
+    if matches, let m = nonEmpty(meaning) { return m }
+    // Active language unavailable → English reference; never a known wrong-language gloss.
+    return nonEmpty(meaningEn)
+}
+
 /// Dynamic coding key so decoding is tolerant of whatever keys appear.
 struct GenericKey: CodingKey {
     var stringValue: String
@@ -63,7 +81,10 @@ public struct Confusable: Codable, Sendable, Equatable {
 public struct WordCard: Codable, Sendable, Equatable {
     public var ipa: String?
     public var pos: String?
-    public var meaningVi: String?
+    /// Primary gloss, in the meaning language active at capture (see `meaningLang`).
+    public var meaning: String?
+    /// Language code of `meaning` (e.g. "vi", "es"). nil = untagged/legacy.
+    public var meaningLang: String?
     public var meaningEn: String?
     public var examples: [String]
     public var etymology: String?
@@ -83,7 +104,8 @@ public struct WordCard: Codable, Sendable, Equatable {
         let c = try decoder.container(keyedBy: GenericKey.self)
         ipa = decodeString(c, "ipa")
         pos = decodeString(c, "pos")
-        meaningVi = decodeString(c, "meaningVi")
+        meaning = decodeString(c, "meaning") ?? decodeString(c, "meaningVi")   // legacy: meaning_vi
+        meaningLang = decodeString(c, "meaningLang") ?? (decodeString(c, "meaningVi") != nil ? "vi" : nil)
         meaningEn = decodeString(c, "meaningEn")
         examples = decodeArray(c, "examples")
         etymology = decodeString(c, "etymology")
@@ -108,7 +130,8 @@ public struct WordCard: Codable, Sendable, Equatable {
         func pick(_ a: String?, _ b: String?) -> String? { (a?.isEmpty == false) ? a : b }
         var c = self
         c.ipa = pick(ipa, other.ipa); c.pos = pick(pos, other.pos)
-        c.meaningVi = pick(meaningVi, other.meaningVi); c.meaningEn = pick(meaningEn, other.meaningEn)
+        c.meaning = pick(meaning, other.meaning); c.meaningLang = pick(meaningLang, other.meaningLang)
+        c.meaningEn = pick(meaningEn, other.meaningEn)
         c.etymology = pick(etymology, other.etymology); c.cefrLevel = pick(cefrLevel, other.cefrLevel)
         c.register = pick(register, other.register); c.frequency = pick(frequency, other.frequency)
         if examples.isEmpty { c.examples = other.examples }
@@ -121,6 +144,11 @@ public struct WordCard: Codable, Sendable, Equatable {
         c.contextOfUse = pick(contextOfUse, other.contextOfUse)
         c.grammarNote = pick(grammarNote, other.grammarNote)
         return c
+    }
+
+    /// The gloss to display for the active meaning language `code`.
+    public func meaning(forLanguage code: String) -> String? {
+        resolveMeaning(meaning: meaning, lang: meaningLang, meaningEn: meaningEn, for: code)
     }
 }
 
@@ -149,7 +177,10 @@ public struct PhraseCard: Codable, Sendable, Equatable {
     public var type: String?
     public var formulaPattern: String?
     public var patternConfidence: Double?
-    public var meaningVi: String?
+    /// Primary gloss, in the meaning language active at capture (see `meaningLang`).
+    public var meaning: String?
+    /// Language code of `meaning` (e.g. "vi", "es"). nil = untagged/legacy.
+    public var meaningLang: String?
     public var meaningEn: String?
     public var register: String?
     public var cefrLevel: String?
@@ -169,7 +200,8 @@ public struct PhraseCard: Codable, Sendable, Equatable {
         type = decodeString(c, "type")
         formulaPattern = decodeString(c, "formulaPattern")
         patternConfidence = decodeDouble(c, "patternConfidence")
-        meaningVi = decodeString(c, "meaningVi")
+        meaning = decodeString(c, "meaning") ?? decodeString(c, "meaningVi")   // legacy: meaning_vi
+        meaningLang = decodeString(c, "meaningLang") ?? (decodeString(c, "meaningVi") != nil ? "vi" : nil)
         meaningEn = decodeString(c, "meaningEn")
         register = decodeString(c, "register")
         cefrLevel = decodeString(c, "cefrLevel")
@@ -194,7 +226,8 @@ public struct PhraseCard: Codable, Sendable, Equatable {
         var c = self
         c.type = pick(type, other.type); c.formulaPattern = pick(formulaPattern, other.formulaPattern)
         c.patternConfidence = patternConfidence ?? other.patternConfidence
-        c.meaningVi = pick(meaningVi, other.meaningVi); c.meaningEn = pick(meaningEn, other.meaningEn)
+        c.meaning = pick(meaning, other.meaning); c.meaningLang = pick(meaningLang, other.meaningLang)
+        c.meaningEn = pick(meaningEn, other.meaningEn)
         c.register = pick(register, other.register); c.cefrLevel = pick(cefrLevel, other.cefrLevel)
         c.separable = separable ?? other.separable
         c.objectType = pick(objectType, other.objectType); c.usageNote = pick(usageNote, other.usageNote)
@@ -207,6 +240,11 @@ public struct PhraseCard: Codable, Sendable, Equatable {
         c.grammarNote = pick(grammarNote, other.grammarNote)
         return c
     }
+
+    /// The gloss to display for the active meaning language `code`.
+    public func meaning(forLanguage code: String) -> String? {
+        resolveMeaning(meaning: meaning, lang: meaningLang, meaningEn: meaningEn, for: code)
+    }
 }
 
 /// One vocabulary item extracted from a paragraph (SPEC §7c).
@@ -214,7 +252,9 @@ public struct ParagraphItem: Codable, Sendable, Equatable, Hashable {
     public var word: String?
     public var cefr: String?
     public var pos: String?
-    public var meaningVi: String?
+    /// Gloss in the meaning language active at extraction (see `meaningLang`).
+    public var meaning: String?
+    public var meaningLang: String?
     public var reasonToLearn: String?
     public var category: String?
 
@@ -223,7 +263,8 @@ public struct ParagraphItem: Codable, Sendable, Equatable, Hashable {
         word = decodeString(c, "word")
         cefr = decodeString(c, "cefr")
         pos = decodeString(c, "pos")
-        meaningVi = decodeString(c, "meaningVi")
+        meaning = decodeString(c, "meaning") ?? decodeString(c, "meaningVi")   // legacy: meaning_vi
+        meaningLang = decodeString(c, "meaningLang") ?? (decodeString(c, "meaningVi") != nil ? "vi" : nil)
         reasonToLearn = decodeString(c, "reasonToLearn")
         category = decodeString(c, "category")
     }

@@ -32,7 +32,7 @@ final class CaptureIntegrationTests: XCTestCase {
 
         // The stored ai_result decodes back into a WordCard with a meaning.
         let card = try JSONCleaning.decode(WordCard.self, from: entry.aiResult)
-        XCTAssertTrue((card.meaningVi?.isEmpty == false) || (card.meaningEn?.isEmpty == false))
+        XCTAssertTrue((card.meaning?.isEmpty == false) || (card.meaningEn?.isEmpty == false))
 
         // A review_state row was created.
         XCTAssertNotNil(try ReviewRepository(dbQueue: queue).state(entryId: id))

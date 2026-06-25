@@ -19,13 +19,13 @@ enum CardDecoding {
         switch entry.cardType {
         case .word:
             let c = word(entry)
-            return (c?.pos, meaningLanguage == "vi" ? (c?.meaningVi ?? c?.meaningEn) : (c?.meaningEn ?? c?.meaningVi), c?.cefrLevel ?? entry.cefr)
+            return (c?.pos, c?.meaning(forLanguage: meaningLanguage), c?.cefrLevel ?? entry.cefr)
         case .phrase:
             let c = phrase(entry)
-            return (c?.type, meaningLanguage == "vi" ? (c?.meaningVi ?? c?.meaningEn) : (c?.meaningEn ?? c?.meaningVi), c?.cefrLevel ?? entry.cefr)
+            return (c?.type, c?.meaning(forLanguage: meaningLanguage), c?.cefrLevel ?? entry.cefr)
         case .paragraphItem:
             let c = paragraphItem(entry)
-            return (c?.pos, c?.meaningVi, c?.cefr ?? entry.cefr)
+            return (c?.pos, c?.meaning, c?.cefr ?? entry.cefr)
         case .none:
             return (nil, nil, entry.cefr)
         }

@@ -14,8 +14,8 @@ struct ParagraphItemDetailView: View {
                     if let pos = item?.pos { Pill(pos, style: .type) }
                     if let cefr = item?.cefr { Pill.cefr(cefr) }
                 }
-                if let vi = item?.meaningVi {
-                    Text(vi).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                if let m = item?.meaning {
+                    Text(m).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.textPrimary)
                 }
                 if let reason = item?.reasonToLearn {
                     VStack(alignment: .leading, spacing: 6) {

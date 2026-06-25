@@ -18,7 +18,7 @@ final class RelationsBackfillerTests: XCTestCase {
         let card = try JSONCleaning.decode(WordCard.self, from: updated!.aiResult)
         XCTAssertEqual(card.collocations, ["affect the outcome"])
         XCTAssertEqual(card.confusables.first?.word, "effect")
-        XCTAssertEqual(card.meaningVi, "ảnh hưởng")   // preserved through the merge
+        XCTAssertEqual(card.meaning, "ảnh hưởng")   // preserved through the merge
     }
 
     func testSkipsWhenAlreadyPopulated() async throws {

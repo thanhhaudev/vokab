@@ -355,11 +355,12 @@ struct SettingsView: View {
                         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                 }
                 SettingsRow(L.t("Meaning language", "Ngôn ngữ giải nghĩa"),
-                            sub: L.t("Definitions returned by agy", "Trường meaning_vi trong kết quả")) {
+                            sub: L.t("Language of definitions returned by agy", "Ngôn ngữ phần giải nghĩa agy trả về")) {
                     Menu {
-                        Button("Tiếng Việt") { settings.meaningLanguage = "vi"; persist() }
-                        Button("English") { settings.meaningLanguage = "en"; persist() }
-                    } label: { selLabel(settings.meaningLanguage == "vi" ? "Tiếng Việt" : "English") }
+                        ForEach(Self.meaningLanguageCodes, id: \.self) { code in
+                            Button(languageLabel(code)) { settings.meaningLanguage = code; persist() }
+                        }
+                    } label: { selLabel(languageLabel(settings.meaningLanguage)) }
                         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                 }
             }
@@ -549,6 +550,16 @@ struct SettingsView: View {
         L.lang = lang
         persist()
         langTick += 1   // re-render this window immediately
+    }
+
+    /// Curated short list for the meaning-language picker. The system still accepts
+    /// any code; this is just the common set surfaced in Settings.
+    static let meaningLanguageCodes = ["vi", "en", "es", "fr", "de", "ja", "zh", "ko"]
+
+    /// Native display name for a language code (autonym), e.g. "vi"→"Tiếng Việt",
+    /// "ja"→"日本語". No hardcoded name table — derived from `Locale`.
+    private func languageLabel(_ code: String) -> String {
+        Locale(identifier: code).localizedString(forLanguageCode: code)?.capitalized ?? code
     }
 
     private func persist() {

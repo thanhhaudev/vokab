@@ -39,9 +39,10 @@ public actor CaptureWorker {
     }
 
     private func run(_ id: Int64) async {
-        await gate.wait()
-        let outcome = await capture.runAnalysis(entryId: id)
-        await gate.signal()
+        // Cancelled while queued (e.g. shutdown) → skip; never over-signal.
+        let outcome = (try? await gate.withPermit {
+            await capture.runAnalysis(entryId: id)
+        }) ?? .skipped
         inflight.remove(id)
         onActivity?(inflight.count)
         tasks[id] = nil

@@ -99,8 +99,17 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
     func showExtraction(items: [ParagraphItem], translationVi: String? = nil, source: SourceContext, language: String, rawText: String, failedChunks: Int = 0) {
         guard let env else { return }
+        // Compute the already-in-library set up front so the view renders library
+        // words as non-interactive `savedRow`s from the first frame (avoids a stale
+        // interactive Button — see ParagraphExtractionView.init).
+        let initialSavedSet = Set(items.compactMap { item -> String? in
+            guard let word = item.word else { return nil }
+            let found = (try? env.entries.find(rawText: word, language: language)) ?? nil
+            return found != nil ? TextKey.normalize(word) : nil
+        })
         let root = ParagraphExtractionView(items: items, translationVi: translationVi,
                                            failedChunks: failedChunks,
+                                           initialSavedSet: initialSavedSet,
                                            source: source, language: language,
                                            rawText: rawText,
                                            onClose: { [weak self] in self?.extraction?.close() })

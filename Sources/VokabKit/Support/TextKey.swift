@@ -9,16 +9,21 @@ public enum TextKey {
         InputCleaner.clean(text, type: .word).lowercased()
     }
 
-    /// Cache/dedup key combining normalized text and language.
-    public static func cacheKey(text: String, language: String) -> String {
-        "\(normalize(text))::\(language.lowercased())"
+    /// Cache key combining normalized text and source language. `meaningLanguage`
+    /// (the gloss language) is folded in when given, because AI results now contain
+    /// a `meaning` in that language — entries cached under one meaning language must
+    /// NOT be served when another is active (else a switch yields stale glosses).
+    public static func cacheKey(text: String, language: String, meaningLanguage: String? = nil) -> String {
+        let base = "\(normalize(text))::\(language.lowercased())"
+        guard let ml = meaningLanguage else { return base }
+        return "\(base)::ml=\(ml.lowercased())"
     }
 
     /// Cache key for a paragraph extraction at a given minimum CEFR level.
     /// Distinct min levels must NOT share a cache entry (a higher level yields
     /// fewer words), so the level is folded into the key.
-    public static func cacheKey(text: String, language: String, minLevel: CEFR) -> String {
-        "\(cacheKey(text: text, language: language))::min=\(minLevel.rawValue)"
+    public static func cacheKey(text: String, language: String, minLevel: CEFR, meaningLanguage: String? = nil) -> String {
+        "\(cacheKey(text: text, language: language, meaningLanguage: meaningLanguage))::min=\(minLevel.rawValue)"
     }
 
     /// Day string ("yyyy-MM-dd") for quota bucketing, in the current calendar.

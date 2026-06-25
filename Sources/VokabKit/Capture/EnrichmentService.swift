@@ -43,7 +43,7 @@ public actor EnrichmentService {
             var coreFetched = false
             if card.ipa == nil && card.meaningEn == nil {
                 if let core = try? await agy.defineWordCore(entry.rawText, language: entry.language, taxonomy: []) {
-                    card = card.merging(core)   // partial (meaning_vi/cefr/pos) wins; core fills the rest
+                    card = card.merging(core)   // partial (meaning/cefr/pos) wins; core fills the rest
                     coreFetched = true
                 }
             }

@@ -10,23 +10,17 @@ public struct ReviewRepository: Sendable {
     /// Only entries with `analysis_state = 'ready'` are included.
     public func dueCards(on date: Date) throws -> [ReviewCard] {
         try dbQueue.read { db in
+            // One query: `entries` and `review_state` columns don't collide, so each
+            // record decodes its own columns straight from the joined row (no N+1).
             let rows = try Row.fetchAll(db, sql: """
-                SELECT review_state.*, entries.id AS e_id
+                SELECT entries.*, review_state.*
                 FROM review_state
                 JOIN entries ON entries.id = review_state.entry_id
                 WHERE review_state.due_date <= ?
                   AND entries.analysis_state = 'ready'
                 ORDER BY review_state.due_date ASC
                 """, arguments: [date])
-            var cards: [ReviewCard] = []
-            for row in rows {
-                let entryId: Int64 = row["e_id"]
-                if let entry = try Entry.fetchOne(db, key: entryId),
-                   let state = try ReviewState.fetchOne(db, key: entryId) {
-                    cards.append(ReviewCard(entry: entry, state: state))
-                }
-            }
-            return cards
+            return try rows.map { try ReviewCard(entry: Entry(row: $0), state: ReviewState(row: $0)) }
         }
     }
 
@@ -36,21 +30,13 @@ public struct ReviewRepository: Sendable {
     public func allCards() throws -> [ReviewCard] {
         try dbQueue.read { db in
             let rows = try Row.fetchAll(db, sql: """
-                SELECT review_state.*, entries.id AS e_id
+                SELECT entries.*, review_state.*
                 FROM review_state
                 JOIN entries ON entries.id = review_state.entry_id
                 WHERE entries.analysis_state = 'ready'
                 ORDER BY review_state.due_date ASC
                 """)
-            var cards: [ReviewCard] = []
-            for row in rows {
-                let entryId: Int64 = row["e_id"]
-                if let entry = try Entry.fetchOne(db, key: entryId),
-                   let state = try ReviewState.fetchOne(db, key: entryId) {
-                    cards.append(ReviewCard(entry: entry, state: state))
-                }
-            }
-            return cards
+            return try rows.map { try ReviewCard(entry: Entry(row: $0), state: ReviewState(row: $0)) }
         }
     }
 

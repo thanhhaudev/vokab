@@ -50,11 +50,11 @@ public actor EnrichmentPrefetcher {
             await batchEnricher.submit(id: id)
             return
         }
-        await gate.wait()
-        let entry = try? entries.entry(id: id)
-        if let entry {
-            if (try? await enrichment.enrich(entry: entry)) != nil { onChange() }
+        try? await gate.withPermit {
+            let entry = try? entries.entry(id: id)
+            if let entry {
+                if (try? await enrichment.enrich(entry: entry)) != nil { onChange() }
+            }
         }
-        await gate.signal()
     }
 }

@@ -11,10 +11,20 @@ final class MockAgyRunner: AgyRunner, @unchecked Sendable {
 
     private let lock = NSLock()
     private var steps: [Step]
+    /// When set, the response is chosen by inspecting the prompt instead of popping
+    /// in call order — needed when callers run chunks concurrently (call order is
+    /// nondeterministic) but the response must still match the chunk's content.
+    private let router: (@Sendable (String) -> Step)?
     private(set) var receivedPrompts: [String] = []
 
     init(_ steps: [Step]) {
         self.steps = steps
+        self.router = nil
+    }
+
+    init(router: @escaping @Sendable (String) -> Step) {
+        self.steps = []
+        self.router = router
     }
 
     /// Convenience for a single canned response.
@@ -30,7 +40,12 @@ final class MockAgyRunner: AgyRunner, @unchecked Sendable {
     func run(prompt: String, model: String?) async throws -> String {
         lock.lock()
         receivedPrompts.append(prompt)
-        let step = steps.isEmpty ? nil : steps.removeFirst()
+        let step: Step?
+        if let router {
+            step = router(prompt)
+        } else {
+            step = steps.isEmpty ? nil : steps.removeFirst()
+        }
         lock.unlock()
 
         switch step {

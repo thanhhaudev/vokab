@@ -23,6 +23,10 @@ struct MenubarPopoverView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if !env.isPersistent {
+                notPersistedBanner
+                Hairline()
+            }
             header
             Hairline()
             if nextDue.isEmpty {
@@ -74,6 +78,26 @@ struct MenubarPopoverView: View {
         .onReceive(NotificationCenter.default.publisher(for: WindowManager.dataDidChange)) { _ in
             reload()
         }
+    }
+
+    /// Shown when the on-disk DB couldn't be opened and we're on an in-memory
+    /// fallback — captures will be lost on quit (SPEC §10, data-safety).
+    private var notPersistedBanner: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12)).foregroundStyle(Theme.textDanger)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L.t("Not saving to disk", "Không lưu vào ổ đĩa"))
+                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.textDanger)
+                Text(L.t("The database couldn't open. New words are kept in memory only and will be lost when you quit.",
+                         "Không mở được cơ sở dữ liệu. Từ mới chỉ giữ trong bộ nhớ và sẽ mất khi bạn thoát app."))
+                    .font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.bgDanger)
     }
 
     private var header: some View {

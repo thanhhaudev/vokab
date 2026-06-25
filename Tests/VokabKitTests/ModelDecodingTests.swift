@@ -22,7 +22,7 @@ final class ModelDecodingTests: XCTestCase {
         """
         let card = try JSONCleaning.decode(WordCard.self, from: json)
         XCTAssertEqual(card.pos, "adjective")
-        XCTAssertEqual(card.meaningVi, "phù du, chóng tàn")
+        XCTAssertEqual(card.meaning, "phù du, chóng tàn")
         XCTAssertEqual(card.meaningEn, "lasting a very short time")
         XCTAssertEqual(card.cefrLevel, "C1")
         XCTAssertEqual(card.synonyms, ["transient", "fleeting"])
@@ -34,7 +34,7 @@ final class ModelDecodingTests: XCTestCase {
         let json = #"{"meaning_vi":"nghĩa","pos":"noun"}"#
         let card = try JSONCleaning.decode(WordCard.self, from: json)
         XCTAssertEqual(card.pos, "noun")
-        XCTAssertEqual(card.meaningVi, "nghĩa")
+        XCTAssertEqual(card.meaning, "nghĩa")
         XCTAssertNil(card.ipa)
         XCTAssertEqual(card.examples, [])         // arrays default to empty
         XCTAssertEqual(card.synonyms, [])

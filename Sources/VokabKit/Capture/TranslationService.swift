@@ -28,5 +28,10 @@ public actor TranslationService {
         catch { inFlight[key] = nil; throw error }
     }
 
-    static func languageName(_ code: String) -> String { code == "vi" ? "Vietnamese" : "English" }
+    /// English display name for a language code (e.g. "vi"→"Vietnamese",
+    /// "es"→"Spanish"), so any language works without a hardcoded table. Falls back
+    /// to the code itself for unknown identifiers.
+    public static func languageName(_ code: String) -> String {
+        Locale(identifier: "en").localizedString(forLanguageCode: code)?.capitalized ?? code
+    }
 }

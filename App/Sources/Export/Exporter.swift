@@ -45,9 +45,11 @@ enum Exporter {
     private static func markdown(_ entries: [Entry], meaningLanguage: String) -> String {
         var lines = ["| Word | Type | CEFR | Category | Meaning |", "|---|---|---|---|---|"]
         for e in entries {
-            let meaning = meaning(e, meaningLanguage).replacingOccurrences(of: "|", with: "\\|")
-            let cat = category(e).replacingOccurrences(of: "|", with: "\\|")
-            lines.append("| \(e.rawText) | \(e.type) | \(e.cefr?.uppercased() ?? "") | \(cat) | \(meaning) |")
+            // Every user-derived cell must escape `|` (column separator) and
+            // newlines (would split the row) — including rawText, not just meaning.
+            let cols = [e.rawText, e.type, e.cefr?.uppercased() ?? "", category(e), meaning(e, meaningLanguage)]
+                .map(escapeMarkdown)
+            lines.append("| \(cols.joined(separator: " | ")) |")
         }
         return lines.joined(separator: "\n")
     }
@@ -55,10 +57,12 @@ enum Exporter {
     /// Anki TSV with a per-row deck column. `#deck column:3` maps each category to
     /// its own deck on import (SPEC §7: export by category).
     private static func anki(_ entries: [Entry], meaningLanguage: String) -> String {
-        var lines = ["#separator:tab", "#deck column:3"]
+        var lines = ["#separator:tab", "#deck column:3", "#html:true"]
         for e in entries {
-            let back = meaning(e, meaningLanguage)
-            lines.append("\(e.rawText)\t\(back)\tvokab::\(category(e))")
+            // Tabs (field separator) and newlines (record separator) in any field
+            // would corrupt the import — sanitize every column.
+            let cols = [e.rawText, meaning(e, meaningLanguage), "vokab::\(category(e))"].map(escapeAnki)
+            lines.append(cols.joined(separator: "\t"))
         }
         return lines.joined(separator: "\n")
     }
@@ -68,6 +72,24 @@ enum Exporter {
             return "\"\(field.replacingOccurrences(of: "\"", with: "\"\""))\""
         }
         return field
+    }
+
+    /// Escapes a Markdown table cell: `|` is the column delimiter and any newline
+    /// would break the row, so both are neutralized (newline → `<br>`).
+    private static func escapeMarkdown(_ field: String) -> String {
+        field.replacingOccurrences(of: "|", with: "\\|")
+             .replacingOccurrences(of: "\r\n", with: "<br>")
+             .replacingOccurrences(of: "\n", with: "<br>")
+             .replacingOccurrences(of: "\r", with: "<br>")
+    }
+
+    /// Escapes an Anki TSV field: tab is the field delimiter and newline the record
+    /// delimiter. Anki renders HTML (`#html:true`), so newline → `<br>`, tab → space.
+    private static func escapeAnki(_ field: String) -> String {
+        field.replacingOccurrences(of: "\t", with: " ")
+             .replacingOccurrences(of: "\r\n", with: "<br>")
+             .replacingOccurrences(of: "\n", with: "<br>")
+             .replacingOccurrences(of: "\r", with: "<br>")
     }
 
     /// Shows a save panel and writes the rendered export.

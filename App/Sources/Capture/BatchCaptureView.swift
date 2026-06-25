@@ -106,20 +106,36 @@ struct BatchCaptureView: View {
     // MARK: Logic
 
     private func recomputeSelection() {
-        savedSet = existingSaved()
-        // Default-select lines NOT already in the library (mirror paragraph dedupe).
-        selected = Set(lines.indices.filter { idx in
-            let key = TextKey.normalize(lines[idx])
-            return !key.isEmpty && !savedSet.contains(key)
-        })
+        // Select everything optimistically, then unmark already-saved lines once the
+        // off-main lookup returns. Per-line language detection (NLP) and the DB query
+        // run in a detached task so pasting a long list doesn't jank the main actor.
+        let allLines = lines
+        selected = Set(allLines.indices.filter { !TextKey.normalize(allLines[$0]).isEmpty })
+        let entries = env.entries
+        let fallback = env.settings.defaultCaptureLanguage
+        Task {
+            let saved = await Task.detached { Self.existingSaved(allLines, entries: entries, fallback: fallback) }.value
+            savedSet = saved
+            selected = Set(allLines.indices.filter { idx in
+                let key = TextKey.normalize(allLines[idx])
+                return !key.isEmpty && !saved.contains(key)
+            })
+        }
     }
 
-    private func existingSaved() -> Set<String> {
-        var saved = Set<String>()
+    /// Detects each line's language, groups by language, then does ONE batch DB
+    /// lookup per language. Returns the normalized keys already in the library.
+    private static func existingSaved(_ lines: [String], entries: EntryRepository,
+                                      fallback: String) -> Set<String> {
+        var byLang: [String: [String]] = [:]
         for line in lines {
-            let lang = LanguageDetector.detect(line, default: env.settings.defaultCaptureLanguage)
-            if (try? env.entries.find(rawText: line, language: lang)) != nil {
-                saved.insert(TextKey.normalize(line))
+            let lang = LanguageDetector.detect(line, default: fallback)
+            byLang[lang, default: []].append(line)
+        }
+        var saved = Set<String>()
+        for (lang, group) in byLang {
+            if let keys = try? entries.existingNormalizedKeys(in: group, language: lang) {
+                saved.formUnion(keys)
             }
         }
         return saved

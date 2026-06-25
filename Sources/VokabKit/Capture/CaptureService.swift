@@ -51,6 +51,10 @@ public struct CaptureService: Sendable {
     /// Paragraphs longer than this (in words) are split into sentence-aligned
     /// chunks so agy doesn't summarize a wall of text (SPEC §7c).
     static let paragraphChunkMaxWords = 120
+    /// How many paragraph chunks may call agy at once. >1 cuts latency on long
+    /// passages (a 4-chunk passage finishes in ~2 rounds instead of 4); kept small
+    /// so one paragraph capture doesn't spawn a burst of agy processes.
+    static let paragraphChunkConcurrency = 2
     private let agy: AgyService
     private let entries: EntryRepository
     private let cache: CacheRepository
@@ -102,7 +106,7 @@ public struct CaptureService: Sendable {
         if let existing = try entries.find(rawText: cleaned, language: language) {
             return .duplicate(entryId: existing.id ?? -1, type: existing.cardType ?? type)
         }
-        if let cached = try cache.lookup(text: cleaned, language: language) {
+        if let cached = try cache.lookup(text: cleaned, language: language, meaningLanguage: settings.meaningLanguage) {
             let meta = singleMeta(type: type, json: cached.aiResult)
             let category = try categories.canonicalize(meta.category, now: now)
             let id = try persistEntry(type: type, text: cleaned, language: language,
@@ -143,7 +147,7 @@ public struct CaptureService: Sendable {
                 json = try encode(card); cefr = card.cefrLevel; frequency = nil; rawCategory = card.category
             }
             try quota.increment(on: entry.capturedAt)
-            try cache.upsert(text: text, language: language, aiResult: json, now: entry.capturedAt)
+            try cache.upsert(text: text, language: language, meaningLanguage: settings.meaningLanguage, aiResult: json, now: entry.capturedAt)
             let category = try categories.canonicalize(rawCategory, now: entry.capturedAt)
             _ = try entries.markAnalyzed(id: entryId, aiResult: json, cefr: cefr, frequency: frequency, category: category)
             return .ready
@@ -175,7 +179,10 @@ public struct CaptureService: Sendable {
         // Build a partial WordCard JSON (snake_case keys, decoded leniently later).
         var fields: [String: String] = [:]
         if let p = item.pos { fields["pos"] = p }
-        if let m = item.meaningVi { fields["meaning_vi"] = m }
+        if let m = item.meaning {
+            fields["meaning"] = m
+            fields["meaning_lang"] = item.meaningLang ?? settings.meaningLanguage
+        }
         if let c = item.cefr { fields["cefr_level"] = c }
         if let cat = item.category { fields["category"] = cat }
         let json = (try? encode(fields)) ?? "{}"
@@ -203,7 +210,7 @@ public struct CaptureService: Sendable {
                                  translationVi: nil, failedChunks: 0)
         }
 
-        if let cached = try cache.lookup(text: text, language: language) {
+        if let cached = try cache.lookup(text: text, language: language, meaningLanguage: settings.meaningLanguage) {
             let meta = singleMeta(type: type, json: cached.aiResult)
             let category = try categories.canonicalize(meta.category, now: now)
             let id = try persistEntry(type: type, text: text, language: language,
@@ -231,7 +238,7 @@ public struct CaptureService: Sendable {
 
         // Success: charge quota, cache, persist.
         try quota.increment(on: now)
-        try cache.upsert(text: text, language: language, aiResult: json, now: now)
+        try cache.upsert(text: text, language: language, meaningLanguage: settings.meaningLanguage, aiResult: json, now: now)
         let category = try categories.canonicalize(rawCategory, now: now)
         let id = try persistEntry(type: type, text: text, language: language,
                                   json: json, cefr: cefr, frequency: frequency,
@@ -263,7 +270,7 @@ public struct CaptureService: Sendable {
     /// chunks; quota is charged once per successful chunk (SPEC §7c, §10).
     private func fetchParagraph(text: String, language: String, minLevel: CEFR,
                                now: Date) async throws -> ParagraphFetch {
-        if let cached = try cache.lookup(text: text, language: language, minLevel: minLevel),
+        if let cached = try cache.lookup(text: text, language: language, minLevel: minLevel, meaningLanguage: settings.meaningLanguage),
            let ex = try? JSONCleaning.decode(ParagraphExtraction.self, from: cached.aiResult) {
             return ParagraphFetch(items: ex.items, translationVi: ex.translationVi, failedChunks: 0)
         }
@@ -271,31 +278,48 @@ public struct CaptureService: Sendable {
         let taxonomy = (try? categories.currentTaxonomy()) ?? []
         let chunks = ParagraphChunker.chunk(text, maxWords: Self.paragraphChunkMaxWords)
 
-        var merged: [ParagraphItem] = []
-        var translations: [String] = []
-        var failed = 0
-        for chunk in chunks {
-            do {
-                let ex = try await agy.extractFromParagraph(chunk, minLevel: minLevel, taxonomy: taxonomy)
-                try quota.increment(on: now)                 // charge only on success (SPEC §10)
-                merged = ParagraphMerge.union(merged, ex.items)
-                if let t = ex.translationVi?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty {
-                    translations.append(t)
+        // Run chunks concurrently (bounded) to cut latency, but collect by chunk
+        // index so the merge and dedup stay deterministic — the passage must read in
+        // order regardless of which chunk finishes first. The whole-passage
+        // translation is no longer requested here; it's fetched in the background by
+        // the extraction UI so the item list renders immediately (SPEC §7c).
+        let agy = self.agy
+        let quota = self.quota
+        let sem = AsyncSemaphore(min(Self.paragraphChunkConcurrency, max(1, chunks.count)))
+        var byIndex: [[ParagraphItem]?] = Array(repeating: nil, count: chunks.count)
+        await withTaskGroup(of: (Int, [ParagraphItem]?).self) { group in
+            for (i, chunk) in chunks.enumerated() {
+                group.addTask {
+                    do {
+                        return try await sem.withPermit {
+                            let ex = try await agy.extractFromParagraph(chunk, minLevel: minLevel, taxonomy: taxonomy)
+                            try quota.increment(on: now)     // charge only on success (SPEC §10)
+                            return (i, ex.items)
+                        }
+                    } catch {
+                        return (i, nil)                      // not charged; partial failure
+                    }
                 }
-            } catch {
-                failed += 1                                  // not charged; partial failure
             }
+            for await (i, items) in group {
+                if let items { byIndex[i] = items }
+            }
+        }
+
+        var merged: [ParagraphItem] = []
+        var failed = 0
+        for items in byIndex {
+            guard let items else { failed += 1; continue }
+            merged = ParagraphMerge.union(merged, items)
         }
         // Every chunk failed → surface as a hard failure (no entry, no cache).
         if failed == chunks.count && !chunks.isEmpty {
             throw AgyError.timeout
         }
-        let extraction = ParagraphExtraction(
-            translationVi: translations.isEmpty ? nil : translations.joined(separator: " "),
-            items: merged)
+        let extraction = ParagraphExtraction(translationVi: nil, items: merged)
         let json = (try? encode(extraction)) ?? #"{"items":[]}"#
-        try cache.upsert(text: text, language: language, minLevel: minLevel, aiResult: json, now: now)
-        return ParagraphFetch(items: merged, translationVi: extraction.translationVi, failedChunks: failed)
+        try cache.upsert(text: text, language: language, minLevel: minLevel, meaningLanguage: settings.meaningLanguage, aiResult: json, now: now)
+        return ParagraphFetch(items: merged, translationVi: nil, failedChunks: failed)
     }
 
     // MARK: - Quota

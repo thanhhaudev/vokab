@@ -16,12 +16,24 @@ public struct EntryRepository: Sendable {
     private let dbQueue: DatabaseQueue
     public init(dbQueue: DatabaseQueue) { self.dbQueue = dbQueue }
 
-    /// Inserts an entry and an initial recognition review_state due at `dueDate`.
-    /// Returns the new entry id.
+    /// Atomic find-or-create: returns the existing entry's id if one with the same
+    /// normalized text + language is already stored, otherwise inserts the entry
+    /// plus an initial recognition review_state due at `dueDate`. The whole check
+    /// and insert run in one `write` (serialized by GRDB) so two concurrent
+    /// captures of the same term can't both insert; the unique index from migration
+    /// v7 is the hard backstop. The existence probe mirrors `find` exactly.
     @discardableResult
     public func insertCapture(_ entry: Entry, dueDate: Date, startingEase: Double = 2.5) throws -> Int64 {
-        try dbQueue.write { db in
+        let normalized = TextKey.normalize(entry.rawText)
+        return try dbQueue.write { db in
+            if let existingId = try Int64.fetchOne(db, sql: """
+                SELECT id FROM entries
+                WHERE normalized_text = ? AND lower(language) = lower(?)
+                """, arguments: [normalized, entry.language]) {
+                return existingId
+            }
             var e = entry
+            e.normalizedText = normalized               // canonical dedup key (backs the unique index)
             try e.insert(db)
             let id = e.id!
             let state = ReviewState(entryId: id, easeFactor: startingEase, dueDate: dueDate, cardMode: .recognition)
@@ -30,14 +42,31 @@ public struct EntryRepository: Sendable {
         }
     }
 
-    /// Dedup lookup by normalized text + language (SPEC §11).
+    /// Dedup lookup by canonical normalized key + language (SPEC §11).
     public func find(rawText: String, language: String) throws -> Entry? {
         let normalized = TextKey.normalize(rawText)
         return try dbQueue.read { db in
             try Entry
-                .filter(sql: "lower(trim(raw_text)) = ? AND lower(language) = ?",
+                .filter(sql: "normalized_text = ? AND lower(language) = ?",
                         arguments: [normalized, language.lowercased()])
                 .fetchOne(db)
+        }
+    }
+
+    /// Batch dedup lookup: of the given `texts`, returns the set of normalized keys
+    /// (`TextKey.normalize`) already stored for `language`. One query instead of N
+    /// `find` calls — used by the batch-capture preview to mark already-saved lines.
+    /// Matches the canonical key exactly (the `normalized_text` column).
+    public func existingNormalizedKeys(in texts: [String], language: String) throws -> Set<String> {
+        let keys = Array(Set(texts.map { TextKey.normalize($0) }.filter { !$0.isEmpty }))
+        guard !keys.isEmpty else { return [] }
+        return try dbQueue.read { db in
+            let placeholders = databaseQuestionMarks(count: keys.count)
+            let rows = try String.fetchAll(db, sql: """
+                SELECT DISTINCT normalized_text FROM entries
+                WHERE lower(language) = ? AND normalized_text IN (\(placeholders))
+                """, arguments: StatementArguments([language.lowercased()] + keys))
+            return Set(rows)
         }
     }
 

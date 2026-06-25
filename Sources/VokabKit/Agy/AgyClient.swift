@@ -36,8 +36,14 @@ public struct AgyClient: AgyRunner {
         // Hard wall-clock guard a few seconds beyond agy's own print-timeout.
         let hardTimeout = TimeInterval(settings.timeoutSeconds + 5)
 
-        return try await validateOrRun(process, outPipe: outPipe, errPipe: errPipe,
-                                       hardTimeout: hardTimeout, path: path)
+        // Terminate the child if the awaiting task is cancelled, so a cancelled
+        // capture doesn't leave an agy process running until its own timeout.
+        return try await withTaskCancellationHandler {
+            try await validateOrRun(process, outPipe: outPipe, errPipe: errPipe,
+                                    hardTimeout: hardTimeout, path: path)
+        } onCancel: {
+            if process.isRunning { process.terminate() }
+        }
     }
 
     /// Interprets agy stdout that has a zero exit code. agy reports failures

@@ -15,8 +15,12 @@ final class CaptureServiceTests: XCTestCase {
 
     private func makeHarness(_ steps: [MockAgyRunner.Step],
                              settings: VokabSettings = VokabSettings()) throws -> Harness {
+        try makeHarness(MockAgyRunner(steps), settings: settings)
+    }
+
+    private func makeHarness(_ runner: MockAgyRunner,
+                             settings: VokabSettings = VokabSettings()) throws -> Harness {
         let queue = try VokabDatabase.makeInMemory()
-        let runner = MockAgyRunner(steps)
         let agy = AgyService(runner: runner, settings: settings)
         let entries = EntryRepository(dbQueue: queue)
         let cache = CacheRepository(dbQueue: queue)
@@ -48,7 +52,7 @@ final class CaptureServiceTests: XCTestCase {
         XCTAssertEqual(entry.sourceApp, "Safari")
         XCTAssertNotNil(try ReviewRepository(dbQueue: h.queue).state(entryId: id))
         XCTAssertEqual(try h.quota.count(on: now), 1)  // quota charged
-        XCTAssertNotNil(try h.cache.lookup(text: "ephemeral", language: "en")) // cached
+        XCTAssertNotNil(try h.cache.lookup(text: "ephemeral", language: "en", meaningLanguage: "vi")) // cached
     }
 
     func testWordCaptureCanonicalizesAndStoresCategory() async throws {
@@ -89,7 +93,7 @@ final class CaptureServiceTests: XCTestCase {
     func testCacheHitSkipsAgy() async throws {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let h = try makeHarness([])                    // runner would throw if called
-        try h.cache.upsert(text: "cached", language: "en",
+        try h.cache.upsert(text: "cached", language: "en", meaningLanguage: "vi",
                            aiResult: #"{"pos":"verb","cefr_level":"B2"}"#, now: now)
 
         let result = try await h.service.capture(text: "cached", language: "en", source: source(now))
@@ -136,7 +140,7 @@ final class CaptureServiceTests: XCTestCase {
         XCTAssertEqual(result.paragraphItems.count, 2)
         XCTAssertNil(result.entryId)                    // not auto-persisted
         XCTAssertEqual(try h.quota.count(on: now), 1)
-        XCTAssertEqual(result.translationVi, "Bản dịch.")
+        XCTAssertNil(result.translationVi)               // translation now fetched separately (background)
         XCTAssertEqual(result.failedChunks, 0)
 
         // Persisting a chosen item creates a first-class WORD entry (so it gets
@@ -175,7 +179,7 @@ final class CaptureServiceTests: XCTestCase {
     func testReextractCacheHitChargesNoQuota() async throws {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let h = try makeHarness([])                          // runner throws if called
-        try h.cache.upsert(text: "p", language: "en", minLevel: .b1,
+        try h.cache.upsert(text: "p", language: "en", minLevel: .b1, meaningLanguage: "vi",
                            aiResult: #"{"translation_vi":"t","items":[{"word":"x"}]}"#, now: now)
         let fetch = try await h.service.reextractParagraph(text: "p", language: "en", minLevel: .b1, now: now)
         XCTAssertEqual(fetch.items.first?.word, "x")
@@ -223,7 +227,7 @@ final class CaptureServiceTests: XCTestCase {
                                                  forcedType: .paragraphItem, minLevelOverride: .c1)
         XCTAssertEqual(result.type, .paragraphItem)
         XCTAssertEqual(result.paragraphItems.first?.word, "alpha")
-        XCTAssertNotNil(try h.cache.lookup(text: "two words here", language: "en", minLevel: .c1))
+        XCTAssertNotNil(try h.cache.lookup(text: "two words here", language: "en", minLevel: .c1, meaningLanguage: "vi"))
         XCTAssertEqual(try h.quota.count(on: now), 1)
     }
 
@@ -346,14 +350,19 @@ final class CaptureServiceTests: XCTestCase {
 
     func testLongParagraphChunksAndMergesAndChargesPerChunk() async throws {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let h = try makeHarness([
-            .respond(#"{"translation_vi":"Phần một. ","items":[{"word":"alpha","cefr":"B2"}]}"#),
-            .respond(#"{"translation_vi":"Phần hai.","items":[{"word":"beta","cefr":"C1"},{"word":"alpha","cefr":"B2"}]}"#),
-        ])
+        // Chunks run concurrently, so call order is nondeterministic — route the
+        // response by content (the 2nd chunk uniquely contains "sentence13") so the
+        // in-order merge/concatenation assertions below stay deterministic.
+        let runner = MockAgyRunner(router: { prompt in
+            prompt.contains("sentence13")
+                ? .respond(#"{"translation_vi":"Phần hai.","items":[{"word":"beta","cefr":"C1"},{"word":"alpha","cefr":"B2"}]}"#)
+                : .respond(#"{"translation_vi":"Phần một. ","items":[{"word":"alpha","cefr":"B2"}]}"#)
+        })
+        let h = try makeHarness(runner)
         let result = try await h.service.capture(text: longText(), language: "en", source: source(now))
         XCTAssertEqual(h.runner.callCount, 2)                       // chunked into 2 calls
-        XCTAssertEqual(result.paragraphItems.map { $0.word }, ["alpha", "beta"]) // merged, deduped
-        XCTAssertEqual(result.translationVi, "Phần một. Phần hai.")  // concatenated in order
+        XCTAssertEqual(result.paragraphItems.map { $0.word }, ["alpha", "beta"]) // merged, deduped, in chunk order
+        XCTAssertNil(result.translationVi)                        // translation fetched separately now
         XCTAssertEqual(try h.quota.count(on: now), 2)              // one per successful chunk
         XCTAssertEqual(result.failedChunks, 0)
     }

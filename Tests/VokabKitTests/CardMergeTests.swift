@@ -15,7 +15,7 @@ final class CardMergeTests: XCTestCase {
         let core = try JSONCleaning.decode(PhraseCard.self, from: #"{"meaning_vi":"y","variations":[]}"#)
         let enrich = try JSONCleaning.decode(PhraseCard.self, from: #"{"usage_note":"note","variations":["v1"],"separable":true}"#)
         let m = core.merging(enrich)
-        XCTAssertEqual(m.meaningVi, "y")
+        XCTAssertEqual(m.meaning, "y")
         XCTAssertEqual(m.usageNote, "note")
         XCTAssertEqual(m.variations, ["v1"])
         XCTAssertEqual(m.separable, true)

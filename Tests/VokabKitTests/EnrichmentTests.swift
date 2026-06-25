@@ -45,7 +45,7 @@ final class EnrichmentTests: XCTestCase {
         let enriched = try await svc.enrich(entry: try XCTUnwrap(entries.entry(id: id)))
         XCTAssertTrue(enriched.enriched)
         let card = try JSONCleaning.decode(WordCard.self, from: enriched.aiResult)
-        XCTAssertEqual(card.meaningVi, "may mắn")    // partial kept
+        XCTAssertEqual(card.meaning, "may mắn")    // partial kept
         XCTAssertEqual(card.ipa, "/ˌsɛrənˈdɪpɪti/")   // core filled
         XCTAssertEqual(card.meaningEn, "luck")        // core filled
         XCTAssertEqual(card.etymology, "coined 1754") // enrich filled

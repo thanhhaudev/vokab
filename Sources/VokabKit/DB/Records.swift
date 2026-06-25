@@ -6,6 +6,10 @@ import GRDB
 public struct Entry: Codable, FetchableRecord, MutablePersistableRecord, Sendable, Hashable, Identifiable {
     public var id: Int64?
     public var rawText: String
+    /// Canonical dedup key (`TextKey.normalize` of `rawText`): lower-cased,
+    /// punctuation-stripped, whitespace-collapsed. Set by `EntryRepository` on
+    /// insert; backs the unique dedup index (SPEC §11).
+    public var normalizedText: String?
     public var type: String          // CardType.rawValue
     public var language: String
     public var sourceApp: String?
@@ -24,6 +28,7 @@ public struct Entry: Codable, FetchableRecord, MutablePersistableRecord, Sendabl
     enum CodingKeys: String, CodingKey {
         case id
         case rawText = "raw_text"
+        case normalizedText = "normalized_text"
         case type
         case language
         case sourceApp = "source_app"
@@ -42,13 +47,14 @@ public struct Entry: Codable, FetchableRecord, MutablePersistableRecord, Sendabl
         id = inserted.rowID
     }
 
-    public init(id: Int64? = nil, rawText: String, type: String, language: String,
+    public init(id: Int64? = nil, rawText: String, normalizedText: String? = nil, type: String, language: String,
                 sourceApp: String? = nil, sourceURL: String? = nil,
                 capturedAt: Date, aiResult: String, cefr: String? = nil, frequency: String? = nil,
                 enriched: Bool = false, analysisState: String = AnalysisState.ready.rawValue,
                 category: String? = nil, captureSentence: String? = nil) {
         self.id = id
         self.rawText = rawText
+        self.normalizedText = normalizedText
         self.type = type
         self.language = language
         self.sourceApp = sourceApp

@@ -12,7 +12,7 @@ final class AgyServiceTests: XCTestCase {
         let runner = MockAgyRunner(response: #"{"pos":"noun","meaning_vi":"nghĩa"}"#)
         let card = try await service(runner).defineWord("test", language: "en")
         XCTAssertEqual(card.pos, "noun")
-        XCTAssertEqual(card.meaningVi, "nghĩa")
+        XCTAssertEqual(card.meaning, "nghĩa")
         XCTAssertEqual(runner.callCount, 1)
     }
 

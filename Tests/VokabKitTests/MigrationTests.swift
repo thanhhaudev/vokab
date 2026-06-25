@@ -59,6 +59,79 @@ final class MigrationTests: XCTestCase {
         XCTAssertEqual(state, "ready")
     }
 
+    func test_v7_dedupesExistingRowsAndEnforcesUniqueIndex() throws {
+        let queue = try DatabaseQueue()
+        // Migrate only up to v6 so we can plant duplicates the way an old DB would.
+        try VokabDatabase.migrator.migrate(queue, upTo: "v6_analysis_state")
+        try queue.write { db in
+            for raw in ["Spe", "  spe ", "spe", "other"] {
+                try db.execute(sql: """
+                    INSERT INTO entries (raw_text, type, language, captured_at, ai_result, enriched, analysis_state)
+                    VALUES (?, 'word', 'en', ?, '{}', 0, 'ready')
+                    """, arguments: [raw, Date()])
+            }
+        }
+        // Run v7 + v8: the "spe" variants collapse to one; "other" survives, and
+        // every row gets a backfilled canonical normalized_text.
+        try VokabDatabase.migrator.migrate(queue)
+        let count = try queue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE normalized_text = 'spe'")
+        }
+        XCTAssertEqual(count, 1, "duplicates should collapse to a single row")
+        let backfilled = try queue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries WHERE normalized_text IS NULL")
+        }
+        XCTAssertEqual(backfilled, 0, "v8 must backfill normalized_text for every row")
+
+        // The canonical index rejects a new duplicate (same normalized key).
+        XCTAssertThrowsError(try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO entries (raw_text, normalized_text, type, language, captured_at, ai_result, enriched, analysis_state)
+                VALUES ('SPE', 'spe', 'word', 'en', ?, '{}', 0, 'ready')
+                """, arguments: [Date()])
+        })
+        // The self-maintaining lower(trim) backstop rejects an exact-text duplicate
+        // even when normalized_text is left NULL (a raw insert bypassing the repo).
+        XCTAssertThrowsError(try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO entries (raw_text, type, language, captured_at, ai_result, enriched, analysis_state)
+                VALUES ('spe', 'word', 'en', ?, '{}', 0, 'ready')
+                """, arguments: [Date()])
+        })
+    }
+
+    func test_v7_keepsTheMostReviewedDuplicate() throws {
+        let queue = try DatabaseQueue()
+        try VokabDatabase.migrator.migrate(queue, upTo: "v6_analysis_state")
+        // Two duplicates of "dup": the LATER row carries real review progress.
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO entries (id, raw_text, type, language, captured_at, ai_result, enriched, analysis_state)
+                VALUES (1, 'dup', 'word', 'en', ?, '{}', 0, 'ready'),
+                       (2, 'dup', 'word', 'en', ?, '{}', 0, 'ready')
+                """, arguments: [Date(), Date()])
+            try db.execute(sql: """
+                INSERT INTO review_state (entry_id, due_date, review_count) VALUES (1, ?, 0), (2, ?, 7)
+                """, arguments: [Date(), Date()])
+        }
+        try VokabDatabase.migrator.migrate(queue)
+
+        let rows = try queue.read { db in
+            try Row.fetchAll(db, sql: "SELECT id FROM entries WHERE lower(trim(raw_text)) = 'dup'")
+        }
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?["id"], 2)   // the most-reviewed row survived, not the earliest
+        let surviving = try queue.read { db in
+            try Int.fetchOne(db, sql: "SELECT review_count FROM review_state WHERE entry_id = 2")
+        }
+        XCTAssertEqual(surviving, 7)           // its review progress is intact
+        // The discarded row's review_state was cleaned up (no orphan).
+        let orphan = try queue.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM review_state WHERE entry_id = 1")
+        }
+        XCTAssertEqual(orphan, 0)
+    }
+
     func testInsertAndFetchEntryRoundTrips() throws {
         let queue = try VokabDatabase.makeInMemory()
         var entry = Entry(rawText: "ephemeral", type: CardType.word.rawValue, language: "en",

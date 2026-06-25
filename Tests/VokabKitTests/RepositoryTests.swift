@@ -22,6 +22,34 @@ final class RepositoryTests: XCTestCase {
         XCTAssertEqual(try review.state(entryId: id)?.mode, .recognition)
     }
 
+    func testInsertCaptureIsIdempotentOnNormalizedKey() throws {
+        let q = try VokabDatabase.makeInMemory()
+        let entries = EntryRepository(dbQueue: q)
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let id1 = try entries.insertCapture(makeEntry("ephemeral"), dueDate: now)
+        // Same term, different case/whitespace → returns the existing id, no new row.
+        let id2 = try entries.insertCapture(makeEntry("  Ephemeral  "), dueDate: now)
+        XCTAssertEqual(id1, id2)
+        let count = try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries") }
+        XCTAssertEqual(count, 1)
+        // A different language is a distinct entry.
+        let idFr = try entries.insertCapture(makeEntry("ephemeral", language: "fr"), dueDate: now)
+        XCTAssertNotEqual(id1, idFr)
+    }
+
+    func testExistingNormalizedKeysBatchMirrorsFind() throws {
+        let q = try VokabDatabase.makeInMemory()
+        let entries = EntryRepository(dbQueue: q)
+        _ = try entries.insertCapture(makeEntry("Alpha"), dueDate: Date())
+        _ = try entries.insertCapture(makeEntry("beta"), dueDate: Date())
+        _ = try entries.insertCapture(makeEntry("gamma", language: "fr"), dueDate: Date())
+
+        // Case/whitespace-insensitive, language-scoped, one query.
+        let keys = try entries.existingNormalizedKeys(in: ["  ALPHA ", "beta", "delta", "gamma"], language: "en")
+        XCTAssertEqual(keys, ["alpha", "beta"])   // "delta" absent; "gamma" is fr-only
+        XCTAssertEqual(try entries.existingNormalizedKeys(in: [], language: "en"), [])
+    }
+
     func testDueCardsRespectsDueDate() throws {
         let q = try VokabDatabase.makeInMemory()
         let entries = EntryRepository(dbQueue: q)
@@ -44,6 +72,20 @@ final class RepositoryTests: XCTestCase {
         XCTAssertNil(try entries.find(rawText: "ephemeral", language: "fr"))
     }
 
+    func testCanonicalKeyDedupesPunctuationAndWhitespace() throws {
+        let q = try VokabDatabase.makeInMemory()
+        let entries = EntryRepository(dbQueue: q)
+        // The canonical key (TextKey.normalize) strips punctuation + collapses
+        // whitespace — variants the old lower(trim) key treated as distinct.
+        let id1 = try entries.insertCapture(makeEntry("Apple,"), dueDate: Date())
+        let id2 = try entries.insertCapture(makeEntry("  apple "), dueDate: Date())
+        XCTAssertEqual(id1, id2)                                  // deduped to one row
+        XCTAssertNotNil(try entries.find(rawText: "apple", language: "en"))
+        XCTAssertEqual(try q.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entries") }, 1)
+        // The stored canonical key is populated.
+        XCTAssertEqual(try entries.entry(id: id1)?.normalizedText, "apple")
+    }
+
     func testCacheUpsertAndLookup() throws {
         let q = try VokabDatabase.makeInMemory()
         let cache = CacheRepository(dbQueue: q)
@@ -53,6 +95,21 @@ final class RepositoryTests: XCTestCase {
         XCTAssertEqual(try cache.lookup(text: "word", language: "en")?.aiResult, #"{"x":1}"#)
         try cache.clear()
         XCTAssertNil(try cache.lookup(text: "word", language: "en"))
+    }
+
+    func testCacheKeyedByMeaningLanguage() throws {
+        let q = try VokabDatabase.makeInMemory()
+        let cache = CacheRepository(dbQueue: q)
+        let now = Date()
+        // Same text + source language, different meaning language → distinct cache
+        // entries (else switching meaning language serves a stale-language gloss).
+        try cache.upsert(text: "house", language: "en", meaningLanguage: "vi", aiResult: #"{"meaning":"nhà"}"#, now: now)
+        XCTAssertNotNil(try cache.lookup(text: "house", language: "en", meaningLanguage: "vi"))
+        XCTAssertNil(try cache.lookup(text: "house", language: "en", meaningLanguage: "es"))
+
+        try cache.upsert(text: "house", language: "en", meaningLanguage: "es", aiResult: #"{"meaning":"casa"}"#, now: now)
+        XCTAssertEqual(try cache.lookup(text: "house", language: "en", meaningLanguage: "vi")?.aiResult, #"{"meaning":"nhà"}"#)
+        XCTAssertEqual(try cache.lookup(text: "house", language: "en", meaningLanguage: "es")?.aiResult, #"{"meaning":"casa"}"#)
     }
 
     func testQuotaIncrementAndCount() throws {

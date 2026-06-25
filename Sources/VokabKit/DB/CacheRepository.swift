@@ -6,24 +6,24 @@ public struct CacheRepository: Sendable {
     private let dbQueue: DatabaseQueue
     public init(dbQueue: DatabaseQueue) { self.dbQueue = dbQueue }
 
-    public func lookup(text: String, language: String) throws -> CacheEntry? {
-        let key = TextKey.cacheKey(text: text, language: language)
+    public func lookup(text: String, language: String, meaningLanguage: String? = nil) throws -> CacheEntry? {
+        let key = TextKey.cacheKey(text: text, language: language, meaningLanguage: meaningLanguage)
         return try dbQueue.read { db in try CacheEntry.fetchOne(db, key: key) }
     }
 
-    public func upsert(text: String, language: String, aiResult: String, now: Date) throws {
-        let key = TextKey.cacheKey(text: text, language: language)
+    public func upsert(text: String, language: String, meaningLanguage: String? = nil, aiResult: String, now: Date) throws {
+        let key = TextKey.cacheKey(text: text, language: language, meaningLanguage: meaningLanguage)
         let entry = CacheEntry(key: key, aiResult: aiResult, createdAt: now)
         try dbQueue.write { db in try entry.save(db) }
     }
 
-    public func lookup(text: String, language: String, minLevel: CEFR) throws -> CacheEntry? {
-        let key = TextKey.cacheKey(text: text, language: language, minLevel: minLevel)
+    public func lookup(text: String, language: String, minLevel: CEFR, meaningLanguage: String? = nil) throws -> CacheEntry? {
+        let key = TextKey.cacheKey(text: text, language: language, minLevel: minLevel, meaningLanguage: meaningLanguage)
         return try dbQueue.read { db in try CacheEntry.fetchOne(db, key: key) }
     }
 
-    public func upsert(text: String, language: String, minLevel: CEFR, aiResult: String, now: Date) throws {
-        let key = TextKey.cacheKey(text: text, language: language, minLevel: minLevel)
+    public func upsert(text: String, language: String, minLevel: CEFR, meaningLanguage: String? = nil, aiResult: String, now: Date) throws {
+        let key = TextKey.cacheKey(text: text, language: language, minLevel: minLevel, meaningLanguage: meaningLanguage)
         let entry = CacheEntry(key: key, aiResult: aiResult, createdAt: now)
         try dbQueue.write { db in try entry.save(db) }
     }

@@ -141,10 +141,10 @@ struct WordDetailView: View {
         HStack(alignment: .top, spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
                 SecLabel("Meaning")
-                if let vi = card?.meaningVi {
-                    Text(vi).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                if let m = card?.meaning(forLanguage: env.settings.meaningLanguage) {
+                    Text(m).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.textPrimary)
                 }
-                if let en = card?.meaningEn {
+                if let en = card?.meaningEn, en != card?.meaning(forLanguage: env.settings.meaningLanguage) {
                     Text(en).font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineSpacing(3)
                 }
             }

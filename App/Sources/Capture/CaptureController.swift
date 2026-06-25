@@ -69,93 +69,98 @@ final class CaptureController: ObservableObject {
 
         let gate = captureGate(limit: env.settings.maxConcurrent)
         Task {
-            await gate.wait()
-            // Language detection (NLP) off the main actor — paragraph-size text
-            // would otherwise block the UI.
-            let language: String
-            if let languageOverride { language = languageOverride }
-            else if autoDetect {
-                let fb = fallbackLanguage
-                language = await Task.detached { LanguageDetector.detect(trimmed, default: fb) }.value
-            }
-            else { language = fallbackLanguage }
-            do {
-                let began = try env.capture.beginCapture(text: trimmed, language: language,
-                                                         source: src, forcedType: forcedType)
-                switch began {
-                case .paragraph:
-                    // Paragraph: fall through to the original async path so the
-                    // extraction window opens as before.
-                    let result = try await env.capture.capture(text: trimmed, language: language,
-                                                               source: src, forcedType: forcedType,
-                                                               minLevelOverride: minLevel)
-                    let summary = Self.summary(result, text: trimmed, env: env)
-                    pendingParagraph = (result.paragraphItems, result.translationVi, src, language, trimmed, result.failedChunks)
-                    model.onView = { [weak self] in self?.reopenExtraction() }
-                    model.phase = .resolved(entry: nil, fallback: summary, wasDuplicate: false)
-                    WindowManager.shared.showExtraction(items: result.paragraphItems,
-                                                        translationVi: result.translationVi,
-                                                        source: src, language: language, rawText: trimmed,
-                                                        failedChunks: result.failedChunks)
-
-                case .duplicate(let entryId, _):
-                    let entry = try? env.entries.entry(id: entryId)
-                    let dupSummary = entry.map {
-                        Self.summarize(entry: $0, text: trimmed, wasDuplicate: true, env: env)
-                    } ?? trimmed
-                    model.onView = { WindowManager.shared.showCaptureResult(entryId: entryId) }
-                    model.phase = .resolved(entry: entry, fallback: dupSummary, wasDuplicate: true)
-                    WindowManager.notifyDataChanged()
-
-                case .ready(let entryId, _):
-                    let entry = try? env.entries.entry(id: entryId)
-                    let summary = entry.map {
-                        Self.summarize(entry: $0, text: trimmed, wasDuplicate: false, env: env)
-                    } ?? trimmed
-                    model.onView = { WindowManager.shared.showCaptureResult(entryId: entryId) }
-                    model.phase = .resolved(entry: entry, fallback: summary, wasDuplicate: false)
-                    NotificationManager.shared.postResolved(summary: summary, entryId: entryId,
-                                                            wasDuplicate: false)
-                    WindowManager.notifyDataChanged()
-                    Task { await env.prefetcher.prefetch(id: entryId) }
-
-                case .pending(let entryId, _):
-                    // Toast is already showing .analyzing(trimmed). Wire View and
-                    // enqueue background analysis; the worker fires `entryCompleted`
-                    // (via the registered handler) when done — no polling.
-                    model.onView = { WindowManager.shared.showCaptureResult(entryId: entryId) }
-                    await env.captureWorker.enqueueAnalysis(entryId: entryId)
-                    pendingToasts[entryId] = { [weak self] outcome in
-                        guard let self, let env = self.env else { return }
-                        switch outcome {
-                        case .ready:
-                            if let e = try? env.entries.entry(id: entryId) {
-                                let summary = Self.summarize(entry: e, text: trimmed, wasDuplicate: false, env: env)
-                                model.phase = .resolved(entry: e, fallback: summary, wasDuplicate: false)
-                                NotificationManager.shared.postResolved(summary: summary, entryId: entryId,
-                                                                        wasDuplicate: false)
-                                WindowManager.notifyDataChanged()
-                                Task { await env.prefetcher.prefetch(id: entryId) }
-                            }
-                        case .failed:
-                            model.phase = .error("Phân tích thất bại")
-                        default:
-                            break   // skipped: leave the toast as-is
-                        }
-                    }
-
-                case .blocked(let behavior):
-                    model.phase = .error("Daily quota reached (\(behavior.rawValue)).")
-
-                case .empty:
-                    ToastCenter.shared.dismiss(model)
+            // Hold a concurrency permit for the whole capture; `withPermit` always
+            // releases it, even on throw or cancellation (SPEC §9).
+            try? await gate.withPermit {
+                // Language detection (NLP) off the main actor — paragraph-size text
+                // would otherwise block the UI.
+                let language: String
+                if let languageOverride { language = languageOverride }
+                else if autoDetect {
+                    let fb = fallbackLanguage
+                    language = await Task.detached { LanguageDetector.detect(trimmed, default: fb) }.value
                 }
-            } catch let CaptureError.quotaExceeded(behavior) {
-                model.phase = .error("Daily quota reached (\(behavior.rawValue)).")
-            } catch {
-                model.phase = .error(friendly(error))
+                else { language = fallbackLanguage }
+                do {
+                    let began = try env.capture.beginCapture(text: trimmed, language: language,
+                                                             source: src, forcedType: forcedType)
+                    switch began {
+                    case .paragraph:
+                        // Paragraph: fall through to the original async path so the
+                        // extraction window opens as before.
+                        let result = try await env.capture.capture(text: trimmed, language: language,
+                                                                   source: src, forcedType: forcedType,
+                                                                   minLevelOverride: minLevel)
+                        let summary = Self.summary(result, text: trimmed, env: env)
+                        pendingParagraph = (result.paragraphItems, result.translationVi, src, language, trimmed, result.failedChunks)
+                        model.onView = { [weak self] in self?.reopenExtraction() }
+                        model.phase = .resolved(entry: nil, fallback: summary, wasDuplicate: false)
+                        WindowManager.shared.showExtraction(items: result.paragraphItems,
+                                                            translationVi: result.translationVi,
+                                                            source: src, language: language, rawText: trimmed,
+                                                            failedChunks: result.failedChunks)
+
+                    case .duplicate(let entryId, _):
+                        let entry = try? env.entries.entry(id: entryId)
+                        let dupSummary = entry.map {
+                            Self.summarize(entry: $0, text: trimmed, wasDuplicate: true, env: env)
+                        } ?? trimmed
+                        model.onView = { WindowManager.shared.showCaptureResult(entryId: entryId) }
+                        model.phase = .resolved(entry: entry, fallback: dupSummary, wasDuplicate: true)
+                        WindowManager.notifyDataChanged()
+
+                    case .ready(let entryId, _):
+                        let entry = try? env.entries.entry(id: entryId)
+                        let summary = entry.map {
+                            Self.summarize(entry: $0, text: trimmed, wasDuplicate: false, env: env)
+                        } ?? trimmed
+                        model.onView = { WindowManager.shared.showCaptureResult(entryId: entryId) }
+                        model.phase = .resolved(entry: entry, fallback: summary, wasDuplicate: false)
+                        NotificationManager.shared.postResolved(summary: summary, entryId: entryId,
+                                                                wasDuplicate: false)
+                        WindowManager.notifyDataChanged()
+                        Task { await env.prefetcher.prefetch(id: entryId) }
+
+                    case .pending(let entryId, _):
+                        // Toast is already showing .analyzing(trimmed). Wire View and
+                        // enqueue background analysis; the worker fires `entryCompleted`
+                        // (via the registered handler) when done — no polling.
+                        // Register the handler BEFORE enqueueing so a fast-completing
+                        // worker can't fire `entryCompleted` before it exists (the
+                        // event would otherwise be dropped, leaving the toast stuck).
+                        model.onView = { WindowManager.shared.showCaptureResult(entryId: entryId) }
+                        pendingToasts[entryId] = { [weak self] outcome in
+                            guard let self, let env = self.env else { return }
+                            switch outcome {
+                            case .ready:
+                                if let e = try? env.entries.entry(id: entryId) {
+                                    let summary = Self.summarize(entry: e, text: trimmed, wasDuplicate: false, env: env)
+                                    model.phase = .resolved(entry: e, fallback: summary, wasDuplicate: false)
+                                    NotificationManager.shared.postResolved(summary: summary, entryId: entryId,
+                                                                            wasDuplicate: false)
+                                    WindowManager.notifyDataChanged()
+                                    Task { await env.prefetcher.prefetch(id: entryId) }
+                                }
+                            case .failed:
+                                model.phase = .error("Phân tích thất bại")
+                            default:
+                                break   // skipped: leave the toast as-is
+                            }
+                        }
+                        await env.captureWorker.enqueueAnalysis(entryId: entryId)
+
+                    case .blocked(let behavior):
+                        model.phase = .error("Daily quota reached (\(behavior.rawValue)).")
+
+                    case .empty:
+                        ToastCenter.shared.dismiss(model)
+                    }
+                } catch let CaptureError.quotaExceeded(behavior) {
+                    model.phase = .error("Daily quota reached (\(behavior.rawValue)).")
+                } catch {
+                    model.phase = .error(friendly(error))
+                }
             }
-            await gate.signal()
             ToastCenter.shared.scheduleDismiss(model, after: 6)
         }
     }
@@ -164,30 +169,37 @@ final class CaptureController: ObservableObject {
     /// single summary notification. Used by BatchCaptureView after the user picks.
     func captureBatch(_ items: [String], source: SourceContext) {
         guard let env else { return }
-        var added = 0, dupes = 0
-        for raw in items {
-            let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !t.isEmpty else { continue }
-            let lang = LanguageDetector.detect(t, default: env.settings.defaultCaptureLanguage)
-            do {
-                switch try env.capture.beginCapture(text: t, language: lang, source: source) {
-                case let .pending(id, _):
-                    Task { await env.captureWorker.enqueueAnalysis(entryId: id) }
-                    added += 1
-                case .ready:
-                    added += 1
-                case .duplicate:
-                    dupes += 1
-                case .paragraph, .blocked, .empty:
-                    break
-                }
-            } catch { }
+        let fallback = env.settings.defaultCaptureLanguage
+        let trimmed = items.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        Task {
+            // Per-line language detection (NLP) off the main actor; a long paste of
+            // lines would otherwise stutter the UI.
+            let prepared = await Task.detached {
+                trimmed.map { (text: $0, lang: LanguageDetector.detect($0, default: fallback)) }
+            }.value
+            var added = 0, dupes = 0
+            for item in prepared {
+                do {
+                    switch try env.capture.beginCapture(text: item.text, language: item.lang, source: source) {
+                    case let .pending(id, _):
+                        await env.captureWorker.enqueueAnalysis(entryId: id)
+                        added += 1
+                    case .ready:
+                        added += 1
+                    case .duplicate:
+                        dupes += 1
+                    case .paragraph, .blocked, .empty:
+                        break
+                    }
+                } catch { }
+            }
+            WindowManager.notifyDataChanged()
+            let body = dupes > 0
+                ? L.t("Added \(added) · \(dupes) already in vokab", "Đã thêm \(added) · \(dupes) đã có")
+                : L.t("Added \(added) words", "Đã thêm \(added) từ")
+            NotificationManager.shared.postResolved(summary: body, entryId: nil, wasDuplicate: false)
         }
-        WindowManager.notifyDataChanged()
-        let body = dupes > 0
-            ? L.t("Added \(added) · \(dupes) already in vokab", "Đã thêm \(added) · \(dupes) đã có")
-            : L.t("Added \(added) words", "Đã thêm \(added) từ")
-        NotificationManager.shared.postResolved(summary: body, entryId: nil, wasDuplicate: false)
     }
 
     func openLibrary() { WindowManager.shared.showLibrary() }

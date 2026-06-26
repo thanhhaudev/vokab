@@ -79,8 +79,36 @@ public struct Confusable: Codable, Sendable, Equatable {
 
 /// Single-word analysis (SPEC §7a).
 public struct WordCard: Codable, Sendable, Equatable {
+    /// One part-of-speech sense of a word (SPEC: multi-sense words).
+    public struct Sense: Codable, Sendable, Equatable {
+        public var pos: String?
+        public var meaning: String?
+        public var meaningEn: String?
+        public var examples: [String]
+        /// True for the single sense matching the captured sentence's context;
+        /// false when no context sentence was supplied.
+        public var matchesContext: Bool
+
+        public init(pos: String? = nil, meaning: String? = nil, meaningEn: String? = nil,
+                    examples: [String] = [], matchesContext: Bool = false) {
+            self.pos = pos; self.meaning = meaning; self.meaningEn = meaningEn
+            self.examples = examples; self.matchesContext = matchesContext
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: GenericKey.self)
+            pos = decodeString(c, "pos")
+            meaning = decodeString(c, "meaning")
+            meaningEn = decodeString(c, "meaningEn")
+            examples = decodeArray(c, "examples")
+            matchesContext = ((try? c.decodeIfPresent(Bool.self,
+                forKey: GenericKey(stringValue: "matchesContext")!)) ?? nil) ?? false
+        }
+    }
+
     public var ipa: String?
     public var pos: String?
+    public var senses: [Sense]
     /// Primary gloss, in the meaning language active at capture (see `meaningLang`).
     public var meaning: String?
     /// Language code of `meaning` (e.g. "vi", "es"). nil = untagged/legacy.
@@ -104,6 +132,8 @@ public struct WordCard: Codable, Sendable, Equatable {
         let c = try decoder.container(keyedBy: GenericKey.self)
         ipa = decodeString(c, "ipa")
         pos = decodeString(c, "pos")
+        senses = (try? c.decodeIfPresent([Sense].self,
+            forKey: GenericKey(stringValue: "senses")!)) ?? nil ?? []
         meaning = decodeString(c, "meaning") ?? decodeString(c, "meaningVi")   // legacy: meaning_vi
         meaningLang = decodeString(c, "meaningLang") ?? (decodeString(c, "meaningVi") != nil ? "vi" : nil)
         meaningEn = decodeString(c, "meaningEn")

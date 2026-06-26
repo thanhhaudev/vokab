@@ -20,6 +20,7 @@ struct InlineLookupPopover: View {
     /// True from tapping Capture until the inserted entry first resolves, so a
     /// transient `find` miss doesn't flip the card back to `.notSaved`.
     @SwiftUI.State private var pendingCapture = false
+    @SwiftUI.State private var captureHover = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -58,10 +59,19 @@ struct InlineLookupPopover: View {
                 pendingCapture = true
                 CaptureController.shared.capture(text, language: language, type: hint)
             } label: {
-                Label(L.t("Capture", "Lưu lại"), systemImage: "plus").frame(maxWidth: .infinity)
+                HStack(spacing: 9) {
+                    Image(systemName: "plus.circle").font(.system(size: 14))
+                    Text(L.t("Add to library", "Lưu vào thư viện")).font(.system(size: 13, weight: .medium))
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(Theme.accent)
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(captureHover ? Theme.accent.opacity(0.12) : Color.clear)
+                .contentShape(Rectangle())
             }
-            .buttonStyle(.vPrimary)
-            .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 12)
+            .buttonStyle(.plain)
+            .onHover { captureHover = $0 }
         }
     }
 

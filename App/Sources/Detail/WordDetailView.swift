@@ -120,7 +120,7 @@ struct WordDetailView: View {
                     .font(.system(size: 12)).foregroundStyle(Theme.textTertiary).lineLimit(1)
             }
             FlowLayout(spacing: 6) {
-                MultiPill(card?.pos, style: .type)
+                MultiPill(card?.combinedPOS, style: .type)
                 if let cefr = card?.cefrLevel, cefr.cefrLevel != nil { Pill.cefr(cefr) }
                 MultiPill(card?.register, style: .register)
                 CategoryPill(current: current.category) { picked in
@@ -139,13 +139,31 @@ struct WordDetailView: View {
 
     private var twoColumns: some View {
         HStack(alignment: .top, spacing: 0) {
-            VStack(alignment: .leading, spacing: 6) {
-                SecLabel("Meaning")
-                if let m = card?.meaning(forLanguage: env.settings.meaningLanguage) {
-                    Text(m).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.textPrimary)
-                }
-                if let en = card?.meaningEn, en != card?.meaning(forLanguage: env.settings.meaningLanguage) {
-                    Text(en).font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineSpacing(3)
+            VStack(alignment: .leading, spacing: 10) {
+                SecLabel(card.map { $0.resolvedSenses.count > 1 } == true
+                         ? L.t("Senses", "Các nghĩa") : L.t("Meaning", "Nghĩa"))
+                ForEach(Array((card?.resolvedSenses ?? []).enumerated()), id: \.offset) { _, sense in
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            if let pos = sense.pos { Pill(pos, style: .type) }
+                            if sense.matchesContext {
+                                Text(L.t("in context", "trong ngữ cảnh"))
+                                    .font(.system(size: 11)).foregroundStyle(Theme.accent)
+                            }
+                        }
+                        if let g = card?.gloss(sense, forLanguage: env.settings.meaningLanguage) {
+                            Text(g).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                        }
+                        if let en = sense.meaningEn,
+                           en != card?.gloss(sense, forLanguage: env.settings.meaningLanguage) {
+                            Text(en).font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineSpacing(3)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, sense.matchesContext ? 8 : 0)
+                    .overlay(alignment: .leading) {
+                        if sense.matchesContext { Rectangle().fill(Theme.accent).frame(width: 2) }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

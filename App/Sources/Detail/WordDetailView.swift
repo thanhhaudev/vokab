@@ -40,12 +40,13 @@ struct WordDetailView: View {
                     } else {
                         header
                         Hairline()
-                        twoColumns
+                        sensesSection
                         Hairline()
                         etymology
                         seenIn
                         examples
                         synAnt
+                        wordFamilySection
                         collocationsSection
                         confusablesSection
                         contextOfUseSection
@@ -144,69 +145,65 @@ struct WordDetailView: View {
         .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 12)
     }
 
-    // MARK: Two columns
+    // MARK: Senses (full width)
 
-    private var twoColumns: some View {
-        HStack(alignment: .top, spacing: 0) {
-            VStack(alignment: .leading, spacing: 10) {
-                SecLabel(card.map { $0.resolvedSenses.count > 1 } == true
-                         ? L.t("Senses", "Các nghĩa") : L.t("Meaning", "Nghĩa"))
-                ForEach(Array((card?.resolvedSenses ?? []).enumerated()), id: \.offset) { _, sense in
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            if let pos = sense.pos { Pill(pos, style: .type) }
-                            if sense.matchesContext {
-                                Text(L.t("in context", "trong ngữ cảnh"))
-                                    .font(.system(size: 11)).foregroundStyle(Theme.accent)
-                            }
-                        }
-                        if let g = card?.gloss(sense, forLanguage: env.settings.meaningLanguage) {
-                            Text(g).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.textPrimary)
-                        }
-                        if let en = sense.meaningEn,
-                           en != card?.gloss(sense, forLanguage: env.settings.meaningLanguage) {
-                            // English gloss is interactive: hover/click a word to look it up or capture.
-                            InteractiveText(sentence: en, knownPhrases: knownPhrases, language: entry.language)
-                                .lineSpacing(3)
+    private var sensesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SecLabel(card.map { $0.resolvedSenses.count > 1 } == true
+                     ? L.t("Senses", "Các nghĩa") : L.t("Meaning", "Nghĩa"))
+            ForEach(Array((card?.resolvedSenses ?? []).enumerated()), id: \.offset) { _, sense in
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        if let pos = sense.pos { Pill(pos, style: .type) }
+                        if sense.matchesContext {
+                            Text(L.t("in context", "trong ngữ cảnh"))
+                                .font(.system(size: 11)).foregroundStyle(Theme.accent)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, sense.matchesContext ? 8 : 0)
-                    .overlay(alignment: .leading) {
-                        if sense.matchesContext { Rectangle().fill(Theme.accent).frame(width: 2) }
+                    if let g = card?.gloss(sense, forLanguage: env.settings.meaningLanguage) {
+                        Text(g).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                    }
+                    if let en = sense.meaningEn,
+                       en != card?.gloss(sense, forLanguage: env.settings.meaningLanguage) {
+                        // English gloss is interactive: hover/click a word to look it up or capture.
+                        InteractiveText(sentence: en, knownPhrases: knownPhrases, language: entry.language)
+                            .lineSpacing(3)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, sense.matchesContext ? 8 : 0)
+                .overlay(alignment: .leading) {
+                    if sense.matchesContext { Rectangle().fill(Theme.accent).frame(width: 2) }
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16).padding(.vertical, 14)
+    }
 
-            Rectangle().fill(Theme.borderTertiary).frame(width: Theme.hairline(displayScale))
+    // MARK: Word family (related-words cluster)
 
+    @ViewBuilder private var wordFamilySection: some View {
+        if let family = card?.wordFamily, !family.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 SecLabel("Word family")
-                if let family = card?.wordFamily, !family.isEmpty {
-                    ForEach(family, id: \.self) { term in
-                        InteractiveToken(text: term,
-                                         hint: term.trimmingCharacters(in: .whitespaces).contains(" ") ? .phrase : .word,
-                                         language: entry.language,
-                                         underlineOnHover: true) {
-                            Text(term).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textPrimary)
-                        }
-                    }
-                } else if enriching {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(["placeholder term", "another term", "third term"], id: \.self) {
-                            Text($0).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textPrimary)
-                        }
-                    }
-                    .skeleton()
-                    .transition(.opacity)
-                } else {
-                    Text("—").foregroundStyle(Theme.textTertiary)
+                FlowLayout(spacing: 6) {
+                    ForEach(family, id: \.self) { InteractiveChip(text: $0, language: entry.language) }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+        } else if enriching {
+            VStack(alignment: .leading, spacing: 8) {
+                SecLabel("Word family")
+                FlowLayout(spacing: 6) {
+                    ForEach(["placeholder", "another", "third"], id: \.self) { Chip($0) }
+                }
+                .skeleton()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .transition(.opacity)
         }
     }
 

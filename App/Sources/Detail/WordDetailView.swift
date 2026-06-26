@@ -165,7 +165,9 @@ struct WordDetailView: View {
                         }
                         if let en = sense.meaningEn,
                            en != card?.gloss(sense, forLanguage: env.settings.meaningLanguage) {
-                            Text(en).font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineSpacing(3)
+                            // English gloss is interactive: hover/click a word to look it up or capture.
+                            InteractiveText(sentence: en, knownPhrases: knownPhrases, language: entry.language)
+                                .lineSpacing(3)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

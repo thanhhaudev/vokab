@@ -148,37 +148,43 @@ struct WordDetailView: View {
     // MARK: Senses (full width)
 
     private var sensesSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SecLabel(card.map { $0.resolvedSenses.count > 1 } == true
-                     ? L.t("Senses", "Các nghĩa") : L.t("Meaning", "Nghĩa"))
-            ForEach(Array((card?.resolvedSenses ?? []).enumerated()), id: \.offset) { _, sense in
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        if let pos = sense.pos { Pill(pos, style: .type) }
-                        if sense.matchesContext {
-                            Text(L.t("in context", "trong ngữ cảnh"))
-                                .font(.system(size: 11)).foregroundStyle(Theme.accent)
-                        }
-                    }
-                    if let g = card?.gloss(sense, forLanguage: env.settings.meaningLanguage) {
-                        Text(g).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.textPrimary)
-                    }
-                    if let en = sense.meaningEn,
-                       en != card?.gloss(sense, forLanguage: env.settings.meaningLanguage) {
-                        // English gloss is interactive: hover/click a word to look it up or capture.
-                        InteractiveText(sentence: en, knownPhrases: knownPhrases, language: entry.language)
-                            .lineSpacing(3)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, sense.matchesContext ? 8 : 0)
-                .overlay(alignment: .leading) {
-                    if sense.matchesContext { Rectangle().fill(Theme.accent).frame(width: 2) }
-                }
+        let senses = card?.resolvedSenses ?? []
+        return VStack(alignment: .leading, spacing: 0) {
+            SecLabel(senses.count > 1 ? L.t("Senses", "Các nghĩa") : L.t("Meaning", "Nghĩa"))
+                .padding(.bottom, 11)
+            ForEach(Array(senses.enumerated()), id: \.offset) { index, sense in
+                if index > 0 { Hairline().padding(.vertical, 11) }
+                senseRow(sense)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16).padding(.vertical, 14)
+    }
+
+    /// One sense: pos pill inline with the meaning, then a dimmer interactive English gloss.
+    @ViewBuilder private func senseRow(_ sense: WordCard.Sense) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                if let pos = sense.pos { Pill(pos, style: .type) }
+                if let g = card?.gloss(sense, forLanguage: env.settings.meaningLanguage) {
+                    Text(g).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            if let en = sense.meaningEn,
+               en != card?.gloss(sense, forLanguage: env.settings.meaningLanguage) {
+                // English gloss: smaller, dimmer, still interactive (hover/click to capture).
+                InteractiveText(sentence: en, knownPhrases: knownPhrases, language: entry.language,
+                                fontSize: 12, color: Theme.textSecondary)
+                    .lineSpacing(2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, sense.matchesContext ? 8 : 0)
+        .overlay(alignment: .leading) {
+            if sense.matchesContext { Rectangle().fill(Theme.accent).frame(width: 2) }
+        }
     }
 
     // MARK: Word family (related-words cluster)

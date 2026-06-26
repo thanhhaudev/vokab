@@ -43,6 +43,9 @@ struct InteractiveText: View {
     let language: String
     /// Optional headword to emphasize (bold), restoring the prior "Seen in" look.
     var highlight: String? = nil
+    /// Base text size and color (so a secondary gloss can read smaller/dimmer).
+    var fontSize: CGFloat = 13
+    var color: Color = Theme.textPrimary
 
     var body: some View {
         FlowLayout(spacing: 0, lineSpacing: 2) {
@@ -62,8 +65,8 @@ struct InteractiveText: View {
     /// A piece's text, bold when it is the highlighted headword.
     private func label(_ piece: PhraseSpanMatcher.Piece) -> some View {
         Text(piece.display)
-            .font(.system(size: 13, weight: piece.highlighted ? .semibold : .regular))
-            .foregroundStyle(Theme.textPrimary)
+            .font(.system(size: fontSize, weight: piece.highlighted ? .semibold : .regular))
+            .foregroundStyle(color)
     }
 
     private var pieces: [PhraseSpanMatcher.Piece] {

@@ -19,4 +19,32 @@ final class SenseDecodeTests: XCTestCase {
         XCTAssertEqual(card.senses[1].pos, "noun")
         XCTAssertFalse(card.senses[1].matchesContext)
     }
+
+    func testLegacyEntrySynthesizesSingleSense() throws {
+        let card = try JSONCleaning.decode(WordCard.self,
+            from: #"{"pos":"noun","meaning":"con chó","examples":["a big dog"]}"#)
+        XCTAssertEqual(card.senses.count, 0)            // raw senses absent
+        let r = card.resolvedSenses
+        XCTAssertEqual(r.count, 1)                      // one synthesized sense
+        XCTAssertEqual(r[0].pos, "noun")
+        XCTAssertEqual(r[0].meaning, "con chó")
+        XCTAssertEqual(r[0].examples, ["a big dog"])
+    }
+
+    func testPrimarySenseMirrorsIntoTopLevel() throws {
+        let json = #"{"senses":[{"pos":"noun","meaning":"lượt chạy","matches_context":true},{"pos":"verb","meaning":"chạy"}]}"#
+        let card = try JSONCleaning.decode(WordCard.self, from: json)
+        XCTAssertEqual(card.pos, "noun")                // matches_context sense mirrored up
+        XCTAssertEqual(card.meaning, "lượt chạy")
+        XCTAssertEqual(card.primarySense?.pos, "noun")
+    }
+
+    func testGlossPrefersMeaningLanguageThenEnglish() throws {
+        var card = try JSONCleaning.decode(WordCard.self,
+            from: #"{"senses":[{"pos":"verb","meaning":"chạy","meaning_en":"to run"}]}"#)
+        card.meaningLang = "vi"
+        let s = card.resolvedSenses[0]
+        XCTAssertEqual(card.gloss(s, forLanguage: "vi"), "chạy")
+        XCTAssertEqual(card.gloss(s, forLanguage: "en"), "to run")
+    }
 }

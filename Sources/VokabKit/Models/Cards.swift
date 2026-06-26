@@ -128,6 +128,29 @@ public struct WordCard: Codable, Sendable, Equatable {
     public var contextOfUse: String?
     public var grammarNote: String?
 
+    /// The sense the captured sentence used, else the first sense.
+    public var primarySense: Sense? {
+        senses.first(where: { $0.matchesContext }) ?? senses.first
+    }
+
+    /// Senses to render. Multi-sense entries return `senses`; legacy single-pos
+    /// entries synthesize one sense from the top-level fields so callers never
+    /// special-case the old shape.
+    public var resolvedSenses: [Sense] {
+        if !senses.isEmpty { return senses }
+        if pos != nil || meaning != nil || meaningEn != nil || !examples.isEmpty {
+            return [Sense(pos: pos, meaning: meaning, meaningEn: meaningEn,
+                          examples: examples, matchesContext: true)]
+        }
+        return []
+    }
+
+    /// A sense's gloss in the active meaning language, falling back to English,
+    /// reusing the same resolution as the word-level `meaning(forLanguage:)`.
+    public func gloss(_ sense: Sense, forLanguage code: String) -> String? {
+        resolveMeaning(meaning: sense.meaning, lang: meaningLang, meaningEn: sense.meaningEn, for: code)
+    }
+
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: GenericKey.self)
         ipa = decodeString(c, "ipa")
@@ -152,6 +175,16 @@ public struct WordCard: Codable, Sendable, Equatable {
         category = decodeString(c, "category")
         contextOfUse = decodeString(c, "contextOfUse")
         grammarNote = decodeString(c, "grammarNote")
+
+        // When agy returns senses, mirror the primary sense into the legacy
+        // top-level fields so existing readers (summary, flashcard) keep working
+        // without knowing about senses.
+        if let p = senses.first(where: { $0.matchesContext }) ?? senses.first {
+            if pos == nil { pos = p.pos }
+            if meaning == nil { meaning = p.meaning }
+            if meaningEn == nil { meaningEn = p.meaningEn }
+            if examples.isEmpty { examples = p.examples }
+        }
     }
 
     /// Returns a copy where each field keeps `self`'s value when present, else
@@ -170,6 +203,7 @@ public struct WordCard: Codable, Sendable, Equatable {
         if wordFamily.isEmpty { c.wordFamily = other.wordFamily }
         if collocations.isEmpty { c.collocations = other.collocations }
         if confusables.isEmpty { c.confusables = other.confusables }
+        if senses.isEmpty { c.senses = other.senses }
         c.category = pick(category, other.category)
         c.contextOfUse = pick(contextOfUse, other.contextOfUse)
         c.grammarNote = pick(grammarNote, other.grammarNote)

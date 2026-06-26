@@ -47,4 +47,18 @@ final class SenseDecodeTests: XCTestCase {
         XCTAssertEqual(card.gloss(s, forLanguage: "vi"), "chạy")
         XCTAssertEqual(card.gloss(s, forLanguage: "en"), "to run")
     }
+
+    func testCombinedPOSJoinsDistinctSenses() throws {
+        let json = #"{"senses":[{"pos":"verb","meaning":"chạy"},{"pos":"noun","meaning":"lượt chạy"}]}"#
+        let card = try JSONCleaning.decode(WordCard.self, from: json)
+        XCTAssertEqual(card.combinedPOS, "verb / noun")
+    }
+
+    func testCombinedPOSDedupesAndFallsBackToLegacyPos() throws {
+        let dup = try JSONCleaning.decode(WordCard.self,
+            from: #"{"senses":[{"pos":"noun","meaning":"a"},{"pos":"Noun","meaning":"b"}]}"#)
+        XCTAssertEqual(dup.combinedPOS, "noun")         // case-insensitive dedupe, first spelling kept
+        let legacy = try JSONCleaning.decode(WordCard.self, from: #"{"pos":"adverb","meaning":"nhanh"}"#)
+        XCTAssertEqual(legacy.combinedPOS, "adverb")    // legacy single-pos still works
+    }
 }

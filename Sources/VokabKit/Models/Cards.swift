@@ -145,6 +145,17 @@ public struct WordCard: Codable, Sendable, Equatable {
         return []
     }
 
+    /// All distinct sense parts-of-speech joined for a one-line pill row
+    /// (`"verb / noun"`); `MultiPill` splits this back into colored pills.
+    public var combinedPOS: String? {
+        var seen = Set<String>(); var out: [String] = []
+        for s in resolvedSenses {
+            guard let p = s.pos, !p.isEmpty, seen.insert(p.lowercased()).inserted else { continue }
+            out.append(p)
+        }
+        return out.isEmpty ? nil : out.joined(separator: " / ")
+    }
+
     /// A sense's gloss in the active meaning language, falling back to English,
     /// reusing the same resolution as the word-level `meaning(forLanguage:)`.
     public func gloss(_ sense: Sense, forLanguage code: String) -> String? {

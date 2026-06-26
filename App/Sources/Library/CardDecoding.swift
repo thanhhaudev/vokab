@@ -19,7 +19,7 @@ enum CardDecoding {
         switch entry.cardType {
         case .word:
             let c = word(entry)
-            return (c?.pos, c?.meaning(forLanguage: meaningLanguage), c?.cefrLevel ?? entry.cefr)
+            return (c?.combinedPOS, c?.meaning(forLanguage: meaningLanguage), c?.cefrLevel ?? entry.cefr)
         case .phrase:
             let c = phrase(entry)
             return (c?.type, c?.meaning(forLanguage: meaningLanguage), c?.cefrLevel ?? entry.cefr)

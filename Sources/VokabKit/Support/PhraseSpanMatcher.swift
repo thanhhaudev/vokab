@@ -33,8 +33,10 @@ public enum PhraseSpanMatcher {
 
     /// Non-overlapping index ranges over `words` that match a multi-word phrase as
     /// a contiguous subsequence. Single-word phrases are ignored (rendered as plain
-    /// words). Longer phrases win; per-word matching is lenient: exact, or a ≥4-char
-    /// prefix either direction (so `ran`/`runs` matches `run`).
+    /// words). Longer phrases win; per-word matching is lenient: case-insensitive exact,
+    /// or edit-distance ≤1 for words of 3+ characters (so `ran`/`runs` match `run`).
+    /// Longer inflections (e.g. `running`) are intentionally not matched, to avoid false
+    /// grouping of short function words.
     public static func spans(words: [String], phrases: [String]) -> [Range<Int>] {
         let phraseWordLists: [[String]] = phrases
             .map { $0.lowercased().split { !($0.isLetter || $0.isNumber) }.map(String.init) }
@@ -58,15 +60,13 @@ public enum PhraseSpanMatcher {
         return spans
     }
 
-    /// Lenient single-word match: exact, or prefix/stem match.
-    /// Allows: exact match, OR prefix match when at least one is >= 3 chars,
-    /// OR Levenshtein distance <= 1 when both are >= 3 chars (for verb conjugations like ran/run).
+    /// Lenient single-word match: exact, or edit-distance ≤1.
+    /// Allows: case-insensitive exact match, OR Levenshtein distance ≤1 when both
+    /// are 3+ characters (for verb conjugations like ran/run).
     static func wordMatches(_ token: String, _ needle: String) -> Bool {
         let t = token.lowercased(), n = needle.lowercased()
         if t == n { return true }
-        // Prefix match: at least one is >= 3 chars and one is prefix of other
-        if (n.count >= 3 || t.count >= 3) && (t.hasPrefix(n) || n.hasPrefix(t)) { return true }
-        // Lenient stem match: both >= 3 chars and Levenshtein distance <= 1
+        // Levenshtein distance <= 1 for both >= 3 chars (inflections like ran/run/runs)
         if t.count >= 3 && n.count >= 3 && levenshteinDistance(t, n) <= 1 { return true }
         return false
     }

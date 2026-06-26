@@ -129,6 +129,9 @@ final class CaptureController: ObservableObject {
                         // worker can't fire `entryCompleted` before it exists (the
                         // event would otherwise be dropped, leaving the toast stuck).
                         model.onView = { WindowManager.shared.showCaptureResult(entryId: entryId) }
+                        // The entry exists (analyzing) — let any open lookup popover
+                        // resolve to it immediately instead of waiting for analysis.
+                        WindowManager.notifyDataChanged()
                         pendingToasts[entryId] = { [weak self] outcome in
                             guard let self, let env = self.env else { return }
                             switch outcome {
@@ -143,6 +146,7 @@ final class CaptureController: ObservableObject {
                                 }
                             case .failed:
                                 model.phase = .error("Phân tích thất bại")
+                                WindowManager.notifyDataChanged()
                             default:
                                 break   // skipped: leave the toast as-is
                             }

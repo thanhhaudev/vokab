@@ -348,7 +348,7 @@ struct WordDetailView: View {
                 if !syn.isEmpty { chipColumn("Synonyms", syn) }
                 if !ant.isEmpty { chipColumn("Antonyms", ant) }
             }
-            .padding(.horizontal, 16).padding(.bottom, 14)
+            .padding(.horizontal, 16).padding(.vertical, 14)
         } else if enriching {
             VStack(alignment: .leading, spacing: 8) {
                 SecLabel("Synonyms")
@@ -358,7 +358,7 @@ struct WordDetailView: View {
                 .skeleton()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16).padding(.bottom, 14)
+            .padding(.horizontal, 16).padding(.vertical, 14)
             .transition(.opacity)
         }
     }

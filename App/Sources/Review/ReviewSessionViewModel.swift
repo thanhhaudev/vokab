@@ -8,8 +8,6 @@ final class ReviewSessionViewModel: ObservableObject {
     @Published private(set) var index = 0
     @Published var showingBack = false
     @Published private(set) var gradedCount = 0
-    /// Which sense of the current word is being quizzed this showing.
-    @Published private(set) var senseIndex = 0
 
     private let env: AppEnvironment
 
@@ -24,7 +22,6 @@ final class ReviewSessionViewModel: ObservableObject {
         index = 0
         showingBack = false
         gradedCount = 0
-        pickSense()
     }
 
     var current: ReviewCard? { index < cards.count ? cards[index] : nil }
@@ -77,29 +74,6 @@ final class ReviewSessionViewModel: ObservableObject {
         return ClozeBuilder.build(answer: entry.rawText, examples: examples)
     }
 
-    /// Decoded word card for the current entry, if it is a word.
-    var currentWordCard: WordCard? {
-        guard let entry = current?.entry, entry.cardType == .word else { return nil }
-        return CardDecoding.word(entry)
-    }
-    /// Senses for the current word — always ≥1 via `resolvedSenses` fallback.
-    var currentSenses: [WordCard.Sense] { currentWordCard?.resolvedSenses ?? [] }
-    /// The sense chosen to quiz for this showing.
-    var selectedSense: WordCard.Sense? {
-        let s = currentSenses
-        guard !s.isEmpty else { return nil }
-        return s[min(senseIndex, s.count - 1)]
-    }
-    /// The chosen sense's gloss in the active meaning language.
-    func selectedSenseMeaning(meaningLanguage: String) -> String? {
-        guard let card = currentWordCard, let sense = selectedSense else { return nil }
-        return card.gloss(sense, forLanguage: meaningLanguage)
-    }
-
-    private func pickSense() {
-        let n = currentSenses.count
-        senseIndex = n > 1 ? Int.random(in: 0..<n) : 0
-    }
 
     func flip() { showingBack.toggle() }
 
@@ -117,7 +91,6 @@ final class ReviewSessionViewModel: ObservableObject {
         try? env.reviewLog.record(on: now)
         gradedCount += 1
         index += 1
-        pickSense()
         showingBack = false
         WindowManager.notifyDataChanged()
     }

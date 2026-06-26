@@ -22,9 +22,7 @@ struct FlashcardView: View {
                         .id(card.entry.id)
                 } else if model.currentQualifiesForProduction {
                     ProductionCardView(env: env, card: card,
-                                       onGrade: { grade in model.grade(grade) },
-                                       senseMeaning: model.selectedSenseMeaning(meaningLanguage: env.settings.meaningLanguage),
-                                       sensePOS: model.selectedSense?.pos)
+                                       onGrade: { grade in model.grade(grade) })
                         .id(card.entry.id)
                 } else if model.currentQualifiesForCloze, let prompt = model.currentClozePrompt {
                     ClozeCardView(env: env, card: card, prompt: prompt) { grade in model.grade(grade) }
@@ -63,7 +61,7 @@ struct FlashcardView: View {
             VStack(spacing: 4) {
                 HStack(spacing: 4) {
                     if let cefr = summary.cefr { Pill.cefr(cefr) }
-                    if let pos = model.selectedSense?.pos ?? summary.pos { Pill(pos, style: .type) }
+                    MultiPill(summary.pos, style: .type)
                 }
                 Text(card.entry.rawText)
                     .font(.system(size: 30, weight: .medium)).foregroundStyle(Theme.textPrimary)
@@ -101,14 +99,37 @@ struct FlashcardView: View {
     }
 
     private func back(_ card: ReviewCard, summary: (pos: String?, meaning: String?, cefr: String?)) -> some View {
-        VStack(spacing: 6) {
-            let selMeaning = model.selectedSenseMeaning(meaningLanguage: env.settings.meaningLanguage) ?? summary.meaning
-            if let meaning = selMeaning {
-                Text(meaning).font(.system(size: 16, weight: .medium)).foregroundStyle(Theme.textPrimary)
-            }
-            if let en = model.selectedSense?.meaningEn ?? wordMeaningEn(card.entry) {
-                Text(en).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                    .multilineTextAlignment(.center).lineSpacing(3).frame(maxWidth: 420)
+        let wordCard = card.entry.cardType == .word ? CardDecoding.word(card.entry) : nil
+        return VStack(spacing: 6) {
+            if let wordCard {
+                // All senses — the card schedules the whole word, so reveal every meaning.
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(wordCard.resolvedSenses.enumerated()), id: \.offset) { _, s in
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                if let pos = s.pos { Pill(pos, style: .type) }
+                                if let g = wordCard.gloss(s, forLanguage: env.settings.meaningLanguage) {
+                                    Text(g).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            if let en = s.meaningEn,
+                               en != wordCard.gloss(s, forLanguage: env.settings.meaningLanguage) {
+                                Text(en).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: 420, alignment: .leading)
+            } else {
+                if let meaning = summary.meaning {
+                    Text(meaning).font(.system(size: 16, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                }
+                if let en = wordMeaningEn(card.entry) {
+                    Text(en).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                        .multilineTextAlignment(.center).lineSpacing(3).frame(maxWidth: 420)
+                }
             }
             if let sentence = card.entry.captureSentence {
                 VStack(alignment: .leading, spacing: 4) {
@@ -119,7 +140,7 @@ struct FlashcardView: View {
                         .overlay(alignment: .leading) { Rectangle().fill(Theme.accent).frame(width: 2) }
                 }
                 .frame(maxWidth: 420, alignment: .leading).padding(.top, 8)
-            } else if let example = model.selectedSense?.examples.first ?? wordExample(card.entry) {
+            } else if let example = wordCard?.examples.first ?? wordExample(card.entry) {
                 Text(example).font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
                     .frame(maxWidth: 420, alignment: .leading).padding(.leading, 10).padding(.top, 8)
                     .overlay(alignment: .leading) { Rectangle().fill(Theme.borderSecondary).frame(width: 2) }
@@ -131,21 +152,6 @@ struct FlashcardView: View {
                     .background(Theme.bgPrimary, in: Capsule())
                     .overlay(Capsule().strokeBorder(Theme.borderTertiary, lineWidth: Theme.hairline(displayScale)))
                     .padding(.top, 14)
-            }
-            let others = model.currentSenses.filter { $0 != model.selectedSense }
-            if !others.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    SecLabel(L.t("Other senses", "Nghĩa khác"))
-                    ForEach(Array(others.enumerated()), id: \.offset) { _, s in
-                        HStack(spacing: 6) {
-                            if let pos = s.pos { Pill(pos, style: .type) }
-                            if let g = CardDecoding.word(card.entry)?.gloss(s, forLanguage: env.settings.meaningLanguage) {
-                                Text(g).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                            }
-                        }
-                    }
-                }
-                .frame(maxWidth: 420, alignment: .leading).padding(.top, 10)
             }
             CategoryPill(current: card.entry.category) { picked in
                 if let id = card.entry.id {

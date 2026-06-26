@@ -161,16 +161,21 @@ struct WordDetailView: View {
         .padding(.horizontal, 16).padding(.vertical, 14)
     }
 
-    /// One sense: pos pill inline with the meaning, then a dimmer interactive English gloss.
+    /// One sense: pos pill on its own line, then the meaning, then a dimmer
+    /// interactive English gloss.
     @ViewBuilder private func senseRow(_ sense: WordCard.Sense) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .firstTextBaseline, spacing: 7) {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
                 if let pos = sense.pos { Pill(pos, style: .type) }
-                if let g = card?.gloss(sense, forLanguage: env.settings.meaningLanguage) {
-                    Text(g).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                if sense.matchesContext {
+                    Text(L.t("in context", "trong ngữ cảnh"))
+                        .font(.system(size: 11)).foregroundStyle(Theme.accent)
                 }
+            }
+            if let g = card?.gloss(sense, forLanguage: env.settings.meaningLanguage) {
+                Text(g).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             if let en = sense.meaningEn,
                en != card?.gloss(sense, forLanguage: env.settings.meaningLanguage) {

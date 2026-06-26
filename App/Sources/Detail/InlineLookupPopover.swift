@@ -29,7 +29,7 @@ struct InlineLookupPopover: View {
             case .saved(let e): saved(e)
             }
         }
-        .frame(width: 280)
+        .frame(maxWidth: 260, alignment: .leading)
         .background(Theme.bgPrimary)
         .onAppear(perform: resolve)
         .onReceive(NotificationCenter.default.publisher(for: WindowManager.dataDidChange)) { _ in resolve() }
@@ -44,17 +44,21 @@ struct InlineLookupPopover: View {
     }
 
     private var notSaved: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 10) {
             Text(text).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             Button {
                 pendingCapture = true
                 CaptureController.shared.capture(text, language: language, type: hint)
             } label: {
-                Label(L.t("Capture", "Lưu lại"), systemImage: "plus.circle")
+                Image(systemName: "plus.circle").font(.system(size: 16))
+                    .foregroundStyle(Theme.accent)
             }
-            .buttonStyle(.vPrimary)
+            .buttonStyle(.plain)
+            .help(L.t("Capture", "Lưu lại"))
+            .accessibilityLabel(L.t("Capture", "Lưu lại"))
         }
-        .padding(.horizontal, 14).padding(.vertical, 12)
+        .padding(.horizontal, 14).padding(.vertical, 10)
     }
 
     private func saved(_ entry: Entry) -> some View {

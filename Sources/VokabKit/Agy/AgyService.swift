@@ -131,9 +131,9 @@ public struct AgyService: Sendable {
         return (t?.isEmpty == false) ? t : nil
     }
 
-    public func judgeProduction(word: String, sentence: String) async throws -> ProductionFeedback {
+    public func judgeProduction(word: String, sentence: String, senseMeaning: String? = nil) async throws -> ProductionFeedback {
         try await callAndDecode(ProductionFeedback.self,
-                                prompt: PromptTemplates.production(word: word, sentence: sentence))
+                                prompt: PromptTemplates.production(word: word, sentence: sentence, senseMeaning: senseMeaning))
     }
 
     // MARK: - Core

@@ -209,9 +209,10 @@ public enum PromptTemplates {
     }
 
     /// Production / writing judgement (SPEC §7d).
-    public static func production(word: String, sentence: String) -> String {
-        """
-        The user wrote this sentence to practise '\(word)': '\(sentence)'.
+    public static func production(word: String, sentence: String, senseMeaning: String? = nil) -> String {
+        let target = senseMeaning.map { " (meaning: '\($0)')" } ?? ""
+        return """
+        The user wrote this sentence to practise '\(word)'\(target): '\(sentence)'.
         Judge grammar & naturalness. Return ONLY JSON:
         {verdict: 'correct'|'minor_error'|'wrong',
          corrected_sentence,

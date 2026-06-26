@@ -136,4 +136,14 @@ final class PromptTemplateTests: XCTestCase {
         XCTAssertTrue(p.contains("senses"))
         XCTAssertTrue(p.contains("category"))          // unchanged behavior preserved
     }
+
+    func testProductionPromptEmbedsSenseMeaning() {
+        let p = PromptTemplates.production(word: "run", sentence: "I run.", senseMeaning: "lượt chạy")
+        XCTAssertTrue(p.contains("lượt chạy"))
+    }
+
+    func testProductionPromptOmitsMeaningWhenNil() {
+        let p = PromptTemplates.production(word: "run", sentence: "I run.")
+        XCTAssertFalse(p.contains("(meaning:"))
+    }
 }

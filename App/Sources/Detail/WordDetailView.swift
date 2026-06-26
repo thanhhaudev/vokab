@@ -10,6 +10,8 @@ struct WordDetailView: View {
     @EnvironmentObject private var env: AppEnvironment
     @State private var current: Entry
     @State private var enriching = false
+    /// Measured content width; drives the 1-vs-2-column reference layout.
+    @State private var contentWidth: CGFloat = 0
     private let context: DetailContext
 
     init(entry: Entry, context: DetailContext = .library) {
@@ -42,17 +44,10 @@ struct WordDetailView: View {
                         Hairline()
                         sensesSection
                         Hairline()
-                        etymology
-                        seenIn
-                        examples
-                        synAnt
-                        wordFamilySection
-                        collocationsSection
-                        confusablesSection
-                        contextOfUseSection
-                        grammarSection
+                        referenceArea
                     }
                 }
+                .onGeometryChange(for: CGFloat.self, of: { $0.size.width }, action: { contentWidth = $0 })
             }
             if context.isCapture { captureBottomBar } else { bottomBar }
         }
@@ -215,6 +210,45 @@ struct WordDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 14)
             .transition(.opacity)
+        }
+    }
+
+    // MARK: Reference sections (two columns when wide, one when narrow)
+
+    /// The non-senses sections. On a wide detail pane they flow into two columns
+    /// (senses keep full width above); on a narrow pane they stack in one column.
+    @ViewBuilder private var referenceArea: some View {
+        if contentWidth >= 560 {
+            HStack(alignment: .top, spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    etymology
+                    seenIn
+                    examples
+                    confusablesSection
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Rectangle().fill(Theme.borderTertiary).frame(width: Theme.hairline(displayScale))
+                VStack(alignment: .leading, spacing: 0) {
+                    synAnt
+                    wordFamilySection
+                    collocationsSection
+                    contextOfUseSection
+                    grammarSection
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                etymology
+                seenIn
+                examples
+                synAnt
+                wordFamilySection
+                collocationsSection
+                confusablesSection
+                contextOfUseSection
+                grammarSection
+            }
         }
     }
 

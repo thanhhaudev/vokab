@@ -65,6 +65,29 @@ final class CardMergeTests: XCTestCase {
         XCTAssertEqual(merged.grammarNote, "Theo sau V-ing.")
     }
 
+    func testReloadMergePreservesRelationFieldsWhileTakingFreshSenses() throws {
+        // Simulates the detail "Cập nhật nghĩa" reload: a fresh defineWord card
+        // (senses + core, but NO relation fields — the word prompt doesn't return
+        // them) merged over the stored enriched card. Fresh senses/core must win
+        // while collocations/confusables/context_of_use/grammar_note survive.
+        let fresh = try JSONCleaning.decode(WordCard.self, from: #"""
+            {"senses":[{"pos":"verb","meaning":"chạy"},{"pos":"noun","meaning":"lượt chạy"}],
+             "synonyms":["sprint"]}
+        """#)
+        let stored = try JSONCleaning.decode(WordCard.self, from: #"""
+            {"pos":"verb","meaning":"chạy cũ","collocations":["go for a run"],
+             "confusables":[{"word":"ran","note_vi":"quá khứ"}],
+             "context_of_use":"Thể thao.","grammar_note":"Bất quy tắc."}
+        """#)
+        let merged = fresh.merging(stored)
+        XCTAssertEqual(merged.combinedPOS, "verb / noun")        // fresh senses adopted
+        XCTAssertEqual(merged.synonyms, ["sprint"])              // fresh core wins
+        XCTAssertEqual(merged.collocations, ["go for a run"])    // relation field preserved
+        XCTAssertEqual(merged.confusables.first?.word, "ran")    // preserved
+        XCTAssertEqual(merged.contextOfUse, "Thể thao.")         // preserved
+        XCTAssertEqual(merged.grammarNote, "Bất quy tắc.")       // preserved
+    }
+
     func testPhraseMergingKeepsSelfContextOfUseAndGrammarNote() throws {
         let base = try JSONCleaning.decode(PhraseCard.self, from: #"""
             {"context_of_use":"Bối cảnh gốc.","grammar_note":"Ngữ pháp gốc."}

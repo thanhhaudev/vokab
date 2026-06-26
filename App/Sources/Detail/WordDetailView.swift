@@ -400,8 +400,14 @@ struct WordDetailView: View {
                     reloading = true
                     Task {
                         defer { reloading = false }
-                        guard let card = try? await env.agy.defineWord(entry.rawText, language: entry.language),
-                              let json = try? card.encodedJSON() else { return }
+                        guard let fresh = try? await env.agy.defineWord(entry.rawText, language: entry.language)
+                        else { return }
+                        // The word prompt doesn't return relation fields (collocations,
+                        // confusables, context_of_use, grammar_note), so a blind overwrite
+                        // would drop them from an already-enriched entry. Merge instead:
+                        // fresh senses/core win, the stored card preserves enrichment.
+                        let merged = CardDecoding.word(current).map { fresh.merging($0) } ?? fresh
+                        guard let json = try? merged.encodedJSON() else { return }
                         try? env.entries.setAiResult(id: id, aiResult: json)
                         if let refreshed = try? env.entries.entry(id: id) {
                             await MainActor.run { current = refreshed }

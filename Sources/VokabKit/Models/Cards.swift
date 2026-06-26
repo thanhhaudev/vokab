@@ -225,6 +225,16 @@ public struct WordCard: Codable, Sendable, Equatable {
     public func meaning(forLanguage code: String) -> String? {
         resolveMeaning(meaning: meaning, lang: meaningLang, meaningEn: meaningEn, for: code)
     }
+
+    /// Re-encodes this card as agy-shaped snake_case JSON. Used by the detail
+    /// "Cập nhật nghĩa" action to overwrite a legacy entry's stored ai_result
+    /// with the freshly-fetched multi-sense version.
+    public func encodedJSON() throws -> String {
+        let enc = JSONEncoder()
+        enc.keyEncodingStrategy = .convertToSnakeCase
+        enc.outputFormatting = [.withoutEscapingSlashes]
+        return String(decoding: try enc.encode(self), as: UTF8.self)
+    }
 }
 
 /// One error-correction quiz item: a sentence with a blank (`ClozeBuilder.blank`)

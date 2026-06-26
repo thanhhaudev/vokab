@@ -61,4 +61,13 @@ final class SenseDecodeTests: XCTestCase {
         let legacy = try JSONCleaning.decode(WordCard.self, from: #"{"pos":"adverb","meaning":"nhanh"}"#)
         XCTAssertEqual(legacy.combinedPOS, "adverb")    // legacy single-pos still works
     }
+
+    func testEncodedJSONRoundTripsSenses() throws {
+        let json = #"{"ipa":"rʌn","senses":[{"pos":"verb","meaning":"chạy","examples":["I run"],"matches_context":true},{"pos":"noun","meaning":"lượt chạy","examples":["a run"]}]}"#
+        let original = try JSONCleaning.decode(WordCard.self, from: json)
+        let reencoded = try original.encodedJSON()
+        let decoded = try JSONCleaning.decode(WordCard.self, from: reencoded)
+        XCTAssertEqual(decoded.senses, original.senses)
+        XCTAssertEqual(decoded.combinedPOS, "verb / noun")
+    }
 }

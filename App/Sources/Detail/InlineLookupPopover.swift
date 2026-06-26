@@ -53,8 +53,10 @@ struct InlineLookupPopover: View {
                 Image(systemName: "plus.circle").font(.system(size: 14))
                 Text(L.t("Add to library", "Lưu vào thư viện")).font(.system(size: 13, weight: .medium))
             }
+            .fixedSize()
             .foregroundStyle(Theme.accent)
             .padding(.horizontal, 14).padding(.vertical, 11)
+            .frame(minWidth: 200, alignment: .leading)
             .background(captureHover ? Theme.accent.opacity(0.12) : Color.clear)
             .contentShape(Rectangle())
         }

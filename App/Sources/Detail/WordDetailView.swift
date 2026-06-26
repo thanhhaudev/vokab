@@ -175,7 +175,12 @@ struct WordDetailView: View {
                 SecLabel("Word family")
                 if let family = card?.wordFamily, !family.isEmpty {
                     ForEach(family, id: \.self) { term in
-                        Text(term).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                        InteractiveToken(text: term,
+                                         hint: term.trimmingCharacters(in: .whitespaces).contains(" ") ? .phrase : .word,
+                                         language: entry.language,
+                                         underlineOnHover: true) {
+                            Text(term).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                        }
                     }
                 } else if enriching {
                     VStack(alignment: .leading, spacing: 6) {
@@ -312,7 +317,7 @@ struct WordDetailView: View {
             VStack(alignment: .leading, spacing: 8) {
                 SecLabel(L.t("Collocations", "Kết hợp từ"))
                 FlowLayout(spacing: 6) {
-                    ForEach(cols, id: \.self) { Chip($0) }
+                    ForEach(cols, id: \.self) { InteractiveChip(text: $0, language: entry.language) }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -378,7 +383,9 @@ struct WordDetailView: View {
     private func chipColumn(_ title: String, _ items: [String]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             SecLabel(title)
-            FlowLayout(spacing: 6) { ForEach(items, id: \.self) { Chip($0) } }
+            FlowLayout(spacing: 6) {
+                ForEach(items, id: \.self) { InteractiveChip(text: $0, language: entry.language) }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

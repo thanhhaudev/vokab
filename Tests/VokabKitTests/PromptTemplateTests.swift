@@ -123,4 +123,17 @@ final class PromptTemplateTests: XCTestCase {
         XCTAssertTrue(p.lowercased().contains("every"))     // list EVERY word
         XCTAssertTrue(p.lowercased().contains("do not"))    // do not cap / omit
     }
+
+    func testWordPromptRequestsSenses() {
+        let p = PromptTemplates.word("run", language: "en", meaningLanguage: "Vietnamese")
+        XCTAssertTrue(p.contains("senses"))
+        XCTAssertTrue(p.contains("matches_context"))
+        XCTAssertTrue(p.contains("meaning_en"))
+    }
+
+    func testWordCorePromptRequestsSenses() {
+        let p = PromptTemplates.wordCore("run", language: "en", meaningLanguage: "Vietnamese", taxonomy: [])
+        XCTAssertTrue(p.contains("senses"))
+        XCTAssertTrue(p.contains("category"))          // unchanged behavior preserved
+    }
 }

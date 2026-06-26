@@ -8,9 +8,12 @@ public enum PromptTemplates {
     public static func word(_ word: String, language: String, meaningLanguage: String) -> String {
         """
         Define '\(word)' (language: \(language)). Return ONLY JSON:
-        {ipa, pos, meaning, meaning_en, examples[], etymology,
-         cefr_level, register, frequency, synonyms[], antonyms[], word_family[]}
-        "meaning" = the definition in \(meaningLanguage); "meaning_en" = the definition in English.
+        {ipa, senses:[{pos, meaning, meaning_en, examples[], matches_context}],
+         etymology, cefr_level, register, frequency, synonyms[], antonyms[], word_family[]}
+        List ALL common senses of the word, one object per sense in "senses".
+        "meaning" = that sense's definition in \(meaningLanguage); "meaning_en" = in English.
+        "matches_context": set true only on the sense matching a provided context sentence;
+        with no sentence given, set it false on every sense.
         No preamble, no markdown fence.
         """
     }
@@ -65,9 +68,10 @@ public enum PromptTemplates {
     public static func wordCore(_ word: String, language: String, meaningLanguage: String, taxonomy: [String]) -> String {
         """
         Define '\(word)' (language: \(language)). Return ONLY JSON:
-        {ipa, pos, meaning, meaning_en, cefr_level, register, examples[], category}
-        "meaning" = the definition in \(meaningLanguage); "meaning_en" = the definition in English.
-        Give exactly one short example.
+        {ipa, senses:[{pos, meaning, meaning_en, examples[], matches_context}], cefr_level, register, category}
+        List ALL common senses, one object per sense; give exactly one short example per sense.
+        "meaning" = that sense's definition in \(meaningLanguage); "meaning_en" = in English.
+        "matches_context": false on every sense (no context sentence is supplied here).
         For "category": prefer reusing one of [\(taxonomy.joined(separator: ", "))]; only invent a new one if none fits.
         Category MUST be human-readable Title Case (e.g. "Social media"), never snake_case or kebab-case.
         No preamble, no markdown fence.

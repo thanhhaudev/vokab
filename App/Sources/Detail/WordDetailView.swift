@@ -20,6 +20,15 @@ struct WordDetailView: View {
     private var entry: Entry { current }
     private var card: WordCard? { CardDecoding.word(current) }
 
+    /// Phrases to underline as a unit inside example sentences: the word's own
+    /// collocations plus any multi-word word-family entries (phrasal verbs, etc.).
+    private var knownPhrases: [String] {
+        let c = card
+        return (c?.collocations ?? []) + (c?.wordFamily ?? []).filter {
+            $0.trimmingCharacters(in: .whitespaces).contains(" ")
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -247,8 +256,8 @@ struct WordDetailView: View {
         if let sentence = entry.captureSentence {
             VStack(alignment: .leading, spacing: 8) {
                 SecLabel("Seen in")
-                HighlightedSentence(sentence: sentence, target: entry.rawText)
-                    .font(.system(size: 13)).lineSpacing(3)
+                InteractiveText(sentence: sentence, knownPhrases: knownPhrases, language: entry.language)
+                    .lineSpacing(3)
                     .padding(.leading, 10)
                     .overlay(alignment: .leading) { Rectangle().fill(Theme.accent).frame(width: 2) }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -266,8 +275,8 @@ struct WordDetailView: View {
                 SecLabel("Examples")
                 ForEach(ex, id: \.self) { example in
                     HStack(alignment: .top, spacing: 8) {
-                        Text(example)
-                            .font(.system(size: 13)).foregroundStyle(Theme.textPrimary).lineSpacing(3)
+                        InteractiveText(sentence: example, knownPhrases: knownPhrases, language: entry.language)
+                            .lineSpacing(3)
                             .padding(.leading, 10)
                             .overlay(alignment: .leading) {
                                 Rectangle().fill(Theme.borderSecondary).frame(width: 2)

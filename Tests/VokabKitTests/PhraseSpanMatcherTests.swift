@@ -54,4 +54,16 @@ final class PhraseSpanMatcherTests: XCTestCase {
         let p = PhraseSpanMatcher.pieces(sentence: "a big dog", phrases: [])
         XCTAssertEqual(p.map(\.kind), [.word, .plain, .word, .plain, .word])
     }
+
+    func testPiecesMarksHeadwordHighlighted() {
+        let p = PhraseSpanMatcher.pieces(sentence: "I run every morning", phrases: [], highlight: "run")
+        XCTAssertEqual(p.first { $0.highlighted }?.lookup, "run")          // headword marked
+        XCTAssertEqual(p.filter { $0.highlighted }.count, 1)              // only the headword
+        // lenient inflection: "runs" still matches headword "run"
+        let q = PhraseSpanMatcher.pieces(sentence: "she runs daily", phrases: [], highlight: "run")
+        XCTAssertEqual(q.first { $0.highlighted }?.lookup, "runs")
+        // no highlight seed → nothing marked
+        let r = PhraseSpanMatcher.pieces(sentence: "I run", phrases: [])
+        XCTAssertTrue(r.allSatisfy { !$0.highlighted })
+    }
 }

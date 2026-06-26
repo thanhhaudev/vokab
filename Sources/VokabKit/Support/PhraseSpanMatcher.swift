@@ -94,21 +94,34 @@ public enum PhraseSpanMatcher {
     public enum Kind: String, Sendable, Equatable { case plain, word, phrase }
 
     /// One render piece: `display` is the original text (with spacing/punctuation),
-    /// `lookup` is the text used for the saved-check / capture.
+    /// `lookup` is the text used for the saved-check / capture. `highlighted` marks a
+    /// word/phrase piece that matches the optional `highlight` seed (e.g. the headword).
     public struct Piece: Equatable, Sendable {
         public let display: String
         public let lookup: String
         public let kind: Kind
-        public init(display: String, lookup: String, kind: Kind) {
-            self.display = display; self.lookup = lookup; self.kind = kind
+        public let highlighted: Bool
+        public init(display: String, lookup: String, kind: Kind, highlighted: Bool = false) {
+            self.display = display; self.lookup = lookup; self.kind = kind; self.highlighted = highlighted
         }
+    }
+
+    /// True when a word/phrase piece's lookup matches the `highlight` seed: exact
+    /// (case-insensitive), or lenient single-word inflection (so `run` matches `runs`).
+    private static func isHighlighted(_ lookup: String, _ highlight: String?) -> Bool {
+        guard let h = highlight?.trimmingCharacters(in: .whitespaces).lowercased(), !h.isEmpty else { return false }
+        let l = lookup.lowercased()
+        if l == h { return true }
+        if !h.contains(" ") && !l.contains(" ") { return wordMatches(l, h) }
+        return false
     }
 
     /// Splits a sentence into render pieces: known multi-word phrase spans become a
     /// single `.phrase` piece covering ONLY their words + interleaving separators
     /// (trailing punctuation/space stays a separate `.plain` piece); other word
-    /// atoms are `.word`; separators are `.plain`.
-    public static func pieces(sentence: String, phrases: [String]) -> [Piece] {
+    /// atoms are `.word`; separators are `.plain`. When `highlight` is given, the
+    /// word/phrase piece matching it is marked `highlighted` (for headword emphasis).
+    public static func pieces(sentence: String, phrases: [String], highlight: String? = nil) -> [Piece] {
         let allAtoms = atoms(sentence)
         var wordIndexOfAtom: [Int?] = []
         var words: [String] = []
@@ -137,12 +150,13 @@ public enum PhraseSpanMatcher {
                     k += 1
                 }
                 let display = allAtoms[i...lastWordAtom].map(\.text).joined()
-                result.append(Piece(display: display,
-                                    lookup: display.trimmingCharacters(in: .whitespaces),
-                                    kind: .phrase))
+                let lookup = display.trimmingCharacters(in: .whitespaces)
+                result.append(Piece(display: display, lookup: lookup, kind: .phrase,
+                                    highlighted: isHighlighted(lookup, highlight)))
                 i = lastWordAtom + 1
             } else if atom.isWord {
-                result.append(Piece(display: atom.text, lookup: atom.text, kind: .word))
+                result.append(Piece(display: atom.text, lookup: atom.text, kind: .word,
+                                    highlighted: isHighlighted(atom.text, highlight)))
                 i += 1
             } else {
                 result.append(Piece(display: atom.text, lookup: atom.text, kind: .plain))

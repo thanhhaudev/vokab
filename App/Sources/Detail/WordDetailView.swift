@@ -256,7 +256,8 @@ struct WordDetailView: View {
         if let sentence = entry.captureSentence {
             VStack(alignment: .leading, spacing: 8) {
                 SecLabel("Seen in")
-                InteractiveText(sentence: sentence, knownPhrases: knownPhrases, language: entry.language)
+                InteractiveText(sentence: sentence, knownPhrases: knownPhrases,
+                                language: entry.language, highlight: entry.rawText)
                     .lineSpacing(3)
                     .padding(.leading, 10)
                     .overlay(alignment: .leading) { Rectangle().fill(Theme.accent).frame(width: 2) }

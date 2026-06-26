@@ -41,28 +41,33 @@ struct InteractiveText: View {
     let sentence: String
     let knownPhrases: [String]
     let language: String
+    /// Optional headword to emphasize (bold), restoring the prior "Seen in" look.
+    var highlight: String? = nil
 
     var body: some View {
         FlowLayout(spacing: 0, lineSpacing: 2) {
             ForEach(Array(pieces.enumerated()), id: \.offset) { _, piece in
                 switch piece.kind {
                 case .plain:
-                    Text(piece.display).font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+                    label(piece)
                 case .word:
-                    InteractiveToken(text: piece.lookup, hint: .word, language: language) {
-                        Text(piece.display).font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
-                    }
+                    InteractiveToken(text: piece.lookup, hint: .word, language: language) { label(piece) }
                 case .phrase:
-                    InteractiveToken(text: piece.lookup, hint: .phrase, language: language) {
-                        Text(piece.display).font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
-                    }
+                    InteractiveToken(text: piece.lookup, hint: .phrase, language: language) { label(piece) }
                 }
             }
         }
     }
 
+    /// A piece's text, bold when it is the highlighted headword.
+    private func label(_ piece: PhraseSpanMatcher.Piece) -> some View {
+        Text(piece.display)
+            .font(.system(size: 13, weight: piece.highlighted ? .semibold : .regular))
+            .foregroundStyle(Theme.textPrimary)
+    }
+
     private var pieces: [PhraseSpanMatcher.Piece] {
-        PhraseSpanMatcher.pieces(sentence: sentence, phrases: knownPhrases)
+        PhraseSpanMatcher.pieces(sentence: sentence, phrases: knownPhrases, highlight: highlight)
     }
 }
 

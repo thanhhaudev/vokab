@@ -202,11 +202,7 @@ final class LibraryViewModel: ObservableObject {
     // MARK: scheduling helpers (pure)
 
     nonisolated private static func status(_ s: ReviewState?, _ now: Date) -> Theme.DueStatus {
-        guard let s else { return .new }
-        if s.reviewCount == 0 { return .new }
-        if s.dueDate < Calendar.current.startOfDay(for: now) { return .overdue }
-        if s.dueDate <= now.addingTimeInterval(86_400) { return .today }
-        return .future
+        Theme.DueStatus.of(s, now: now)
     }
 
     nonisolated private static func intervalLabel(_ s: ReviewState?, _ now: Date) -> String {

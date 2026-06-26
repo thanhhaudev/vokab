@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import VokabKit
 
 /// Design tokens transcribed from `docs/mockups/mockups.html` so the SwiftUI app
 /// reproduces the mockup faithfully. The mockup is light-only; colors are
@@ -117,7 +118,22 @@ enum Theme {
         case .future:  return dyn(light: 0xBFBFBF, dark: 0x6A6A66)
         }
     }
+}
 
+extension Theme.DueStatus {
+    /// Maps a review state to a due bucket. Pure; nil or never-reviewed → `.new`.
+    /// This is the single source of truth shared by the library list, the menubar,
+    /// and the inline lookup popover.
+    static func of(_ state: ReviewState?, now: Date) -> Theme.DueStatus {
+        guard let s = state else { return .new }
+        if s.reviewCount == 0 { return .new }
+        if s.dueDate < Calendar.current.startOfDay(for: now) { return .overdue }
+        if s.dueDate <= now.addingTimeInterval(86_400) { return .today }
+        return .future
+    }
+}
+
+extension Theme {
     // MARK: SM-2 grade colors
     static func gradeColor(_ grade: ReviewGradeKind) -> Color {
         switch grade {

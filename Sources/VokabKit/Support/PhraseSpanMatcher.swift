@@ -89,4 +89,66 @@ public enum PhraseSpanMatcher {
         }
         return dp[m][n]
     }
+
+    /// Kind of a render piece for an interactive sentence.
+    public enum Kind: String, Sendable, Equatable { case plain, word, phrase }
+
+    /// One render piece: `display` is the original text (with spacing/punctuation),
+    /// `lookup` is the text used for the saved-check / capture.
+    public struct Piece: Equatable, Sendable {
+        public let display: String
+        public let lookup: String
+        public let kind: Kind
+        public init(display: String, lookup: String, kind: Kind) {
+            self.display = display; self.lookup = lookup; self.kind = kind
+        }
+    }
+
+    /// Splits a sentence into render pieces: known multi-word phrase spans become a
+    /// single `.phrase` piece covering ONLY their words + interleaving separators
+    /// (trailing punctuation/space stays a separate `.plain` piece); other word
+    /// atoms are `.word`; separators are `.plain`.
+    public static func pieces(sentence: String, phrases: [String]) -> [Piece] {
+        let allAtoms = atoms(sentence)
+        var wordIndexOfAtom: [Int?] = []
+        var words: [String] = []
+        for a in allAtoms {
+            if a.isWord { wordIndexOfAtom.append(words.count); words.append(a.text) }
+            else { wordIndexOfAtom.append(nil) }
+        }
+        let foundSpans = spans(words: words, phrases: phrases)
+        var spanOfWord: [Int: Range<Int>] = [:]
+        for s in foundSpans { for w in s { spanOfWord[w] = s } }
+
+        var result: [Piece] = []
+        var i = 0
+        while i < allAtoms.count {
+            let atom = allAtoms[i]
+            if atom.isWord, let wi = wordIndexOfAtom[i], let span = spanOfWord[wi], wi == span.lowerBound {
+                // Find the atom index of the span's LAST word; stop there (exclude
+                // any trailing separators/punctuation).
+                var lastWordAtom = i
+                var k = i
+                while k < allAtoms.count {
+                    if let wk = wordIndexOfAtom[k] {
+                        if wk == span.upperBound - 1 { lastWordAtom = k }
+                        if wk >= span.upperBound { break }
+                    }
+                    k += 1
+                }
+                let display = allAtoms[i...lastWordAtom].map(\.text).joined()
+                result.append(Piece(display: display,
+                                    lookup: display.trimmingCharacters(in: .whitespaces),
+                                    kind: .phrase))
+                i = lastWordAtom + 1
+            } else if atom.isWord {
+                result.append(Piece(display: atom.text, lookup: atom.text, kind: .word))
+                i += 1
+            } else {
+                result.append(Piece(display: atom.text, lookup: atom.text, kind: .plain))
+                i += 1
+            }
+        }
+        return result
+    }
 }

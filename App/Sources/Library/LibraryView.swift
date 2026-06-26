@@ -11,6 +11,9 @@ struct LibraryView: View {
     @State private var selected: Entry?
     @State private var search = ""
     @State private var pendingDelete: Entry?
+    @State private var reloadingSenses = false
+    // Bumped after an in-place sense reload so the detail re-keys and re-decodes.
+    @State private var detailReloadToken = 0
     @State private var showAllCategories = false
     @State private var showDashboard = true
     @State private var sortOrder: SortOrder = .recent
@@ -132,8 +135,18 @@ struct LibraryView: View {
     @ViewBuilder private var detailPane: some View {
         if let entry = selected {
             VStack(spacing: 0) {
-                HStack {
+                HStack(spacing: 12) {
                     Spacer()
+                    if entry.cardType == .word {
+                        if reloadingSenses {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Button { reloadSenses(entry) } label: { Image(systemName: "arrow.clockwise") }
+                                .buttonStyle(.plain).foregroundStyle(Theme.textSecondary)
+                                .help(L.t("Update senses", "Cập nhật nghĩa"))
+                                .accessibilityLabel(L.t("Update senses", "Cập nhật nghĩa"))
+                        }
+                    }
                     Button(role: .destructive) { pendingDelete = entry } label: { Image(systemName: "trash") }
                         .buttonStyle(.plain).foregroundStyle(Theme.textDanger)
                         .accessibilityLabel(L.t("Delete", "Xóa"))
@@ -142,7 +155,7 @@ struct LibraryView: View {
                 Hairline()
                 Group {
                     switch entry.cardType {
-                    case .word:          WordDetailView(entry: entry).id(entry.id)
+                    case .word:          WordDetailView(entry: entry).id("\(entry.id ?? 0)#\(detailReloadToken)")
                     case .phrase:        PhraseDetailView(entry: entry).id(entry.id)
                     case .paragraphItem: ParagraphItemDetailView(entry: entry).id(entry.id)
                     case .none:          Text("Unknown entry").padding()
@@ -156,6 +169,30 @@ struct LibraryView: View {
                 Text(L.t("Choose an entry from the list to see its details.",
                          "Chọn một từ trong danh sách để xem chi tiết."))
             }
+        }
+    }
+
+    /// Re-fetches a word and upgrades its stored card to the multi-sense shape.
+    /// Merges the fresh senses/core into the stored card so enrichment/relation
+    /// fields the word prompt doesn't return (collocations, confusables,
+    /// context_of_use, grammar_note) survive; then re-keys the detail to refresh.
+    private func reloadSenses(_ entry: Entry) {
+        guard let id = entry.id, !reloadingSenses else { return }
+        reloadingSenses = true
+        Task {
+            defer { reloadingSenses = false }
+            guard let fresh = try? await env.agy.defineWord(entry.rawText, language: entry.language)
+            else { return }
+            let merged = CardDecoding.word(entry).map { fresh.merging($0) } ?? fresh
+            guard let json = try? merged.encodedJSON() else { return }
+            try? env.entries.setAiResult(id: id, aiResult: json)
+            if let refreshed = try? env.entries.entry(id: id) {
+                await MainActor.run {
+                    selected = refreshed
+                    detailReloadToken += 1
+                }
+            }
+            WindowManager.notifyDataChanged()
         }
     }
 

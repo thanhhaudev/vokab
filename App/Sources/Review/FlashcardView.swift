@@ -23,7 +23,8 @@ struct FlashcardView: View {
                 } else if model.currentQualifiesForProduction {
                     ProductionCardView(env: env, card: card,
                                        onGrade: { grade in model.grade(grade) },
-                                       senseMeaning: model.selectedSenseMeaning(meaningLanguage: env.settings.meaningLanguage))
+                                       senseMeaning: model.selectedSenseMeaning(meaningLanguage: env.settings.meaningLanguage),
+                                       sensePOS: model.selectedSense?.pos)
                         .id(card.entry.id)
                 } else if model.currentQualifiesForCloze, let prompt = model.currentClozePrompt {
                     ClozeCardView(env: env, card: card, prompt: prompt) { grade in model.grade(grade) }

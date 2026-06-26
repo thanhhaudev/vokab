@@ -8,6 +8,7 @@ struct ProductionCardView: View {
     let card: ReviewCard
     let onGrade: (ReviewGrade) -> Void
     var senseMeaning: String? = nil
+    var sensePOS: String? = nil
 
     @State private var sentence = ""
     @State private var feedback: ProductionFeedback?
@@ -40,7 +41,7 @@ struct ProductionCardView: View {
             Text(L.t("Write a sentence using", "Viết một câu dùng")).font(.system(size: 13)).foregroundStyle(Theme.textTertiary)
             Text(card.entry.rawText).font(.system(size: 16, weight: .medium)).foregroundStyle(Theme.textPrimary)
             if let cefr = card.entry.cefr { Pill.cefr(cefr) }
-            if let pos = CardDecoding.summary(card.entry, meaningLanguage: env.settings.meaningLanguage).pos {
+            if let pos = sensePOS ?? CardDecoding.summary(card.entry, meaningLanguage: env.settings.meaningLanguage).pos {
                 Pill(pos, style: .type)
             }
             if let senseMeaning {

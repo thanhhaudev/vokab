@@ -7,6 +7,7 @@ struct ProductionCardView: View {
     let env: AppEnvironment
     let card: ReviewCard
     let onGrade: (ReviewGrade) -> Void
+    var senseMeaning: String? = nil
 
     @State private var sentence = ""
     @State private var feedback: ProductionFeedback?
@@ -41,6 +42,9 @@ struct ProductionCardView: View {
             if let cefr = card.entry.cefr { Pill.cefr(cefr) }
             if let pos = CardDecoding.summary(card.entry, meaningLanguage: env.settings.meaningLanguage).pos {
                 Pill(pos, style: .type)
+            }
+            if let senseMeaning {
+                Text("· \(senseMeaning)").font(.system(size: 13)).foregroundStyle(Theme.textTertiary)
             }
         }
     }
@@ -170,7 +174,7 @@ struct ProductionCardView: View {
         submitting = true; errorMessage = nil
         Task {
             do {
-                let fb = try await env.agy.judgeProduction(word: card.entry.rawText, sentence: text)
+                let fb = try await env.agy.judgeProduction(word: card.entry.rawText, sentence: text, senseMeaning: senseMeaning)
                 feedback = fb
                 phase = (fb.verdict?.lowercased() == "correct") ? .correct : .wrong
             } catch {

@@ -29,7 +29,7 @@ struct InlineLookupPopover: View {
             case .saved(let e): saved(e)
             }
         }
-        .frame(maxWidth: 260, alignment: .leading)
+        .frame(width: 280)
         .background(Theme.bgPrimary)
         .onAppear(perform: resolve)
         .onReceive(NotificationCenter.default.publisher(for: WindowManager.dataDidChange)) { _ in resolve() }
@@ -44,21 +44,25 @@ struct InlineLookupPopover: View {
     }
 
     private var notSaved: some View {
-        HStack(spacing: 10) {
-            Text(text).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.textPrimary)
-                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text(text).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Text(L.t("not saved", "chưa lưu"))
+                    .font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            Hairline()
             Button {
                 pendingCapture = true
                 CaptureController.shared.capture(text, language: language, type: hint)
             } label: {
-                Image(systemName: "plus.circle").font(.system(size: 16))
-                    .foregroundStyle(Theme.accent)
+                Label(L.t("Capture", "Lưu lại"), systemImage: "plus").frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
-            .help(L.t("Capture", "Lưu lại"))
-            .accessibilityLabel(L.t("Capture", "Lưu lại"))
+            .buttonStyle(.vPrimary)
+            .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 12)
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
     }
 
     private func saved(_ entry: Entry) -> some View {

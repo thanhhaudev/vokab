@@ -10,6 +10,7 @@ struct WordDetailView: View {
     @EnvironmentObject private var env: AppEnvironment
     @State private var current: Entry
     @State private var enriching = false
+    @State private var reloading = false
     private let context: DetailContext
 
     init(entry: Entry, context: DetailContext = .library) {
@@ -394,6 +395,25 @@ struct WordDetailView: View {
                         .font(.system(size: 12)).foregroundStyle(Theme.textTertiary).lineLimit(1)
                 }
                 Spacer()
+                Button {
+                    guard let id = entry.id, !reloading else { return }
+                    reloading = true
+                    Task {
+                        defer { reloading = false }
+                        guard let card = try? await env.agy.defineWord(entry.rawText, language: entry.language),
+                              let json = try? card.encodedJSON() else { return }
+                        try? env.entries.setAiResult(id: id, aiResult: json)
+                        if let refreshed = try? env.entries.entry(id: id) {
+                            await MainActor.run { current = refreshed }
+                        }
+                        WindowManager.notifyDataChanged()
+                    }
+                } label: {
+                    Label(L.t("Update senses", "Cập nhật nghĩa"),
+                          systemImage: reloading ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
+                }
+                .buttonStyle(.vSecondary)
+                .disabled(reloading)
                 Button { PracticePresenter.shared.present(entry: entry) } label: {
                     Label(L.t("Practice writing", "Luyện viết"), systemImage: "pencil.line")
                 }

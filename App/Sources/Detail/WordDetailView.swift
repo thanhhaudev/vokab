@@ -378,21 +378,37 @@ struct WordDetailView: View {
         addingExamples = true
         Task {
             defer { addingExamples = false }
-            guard let more = try? await env.agy.moreWordExamples(entry.rawText, language: entry.language,
-                                                                 existing: c.examples), !more.isEmpty else { return }
-            var merged = c.examples
-            for ex in more where !merged.contains(where: { $0.caseInsensitiveCompare(ex) == .orderedSame }) {
-                merged.append(ex)
+            let more: [String]
+            do {
+                more = try await env.agy.moreWordExamples(entry.rawText, language: entry.language,
+                                                          existing: c.examples)
+            } catch {
+                await MainActor.run { notify(L.t("Couldn't load examples", "Không tải được ví dụ"), danger: true) }
+                return
             }
-            guard merged.count > c.examples.count else { return }   // all duplicates
+            let merged = ExampleMatching.merge(c.examples, adding: more)
+            guard merged.count > c.examples.count else {     // all duplicates / nothing new
+                await MainActor.run { notify(L.t("No new examples", "Không có ví dụ mới")) }
+                return
+            }
             c.examples = merged
-            guard let json = try? c.encodedJSON() else { return }
-            try? env.entries.setAiResult(id: id, aiResult: json)
+            do {
+                try env.entries.setAiResult(id: id, aiResult: c.encodedJSON())
+            } catch {
+                await MainActor.run { notify(L.t("Couldn't add examples", "Không thêm được ví dụ"), danger: true) }
+                return
+            }
             if let refreshed = try? env.entries.entry(id: id) {
-                await MainActor.run { current = refreshed }
+                await MainActor.run { current = refreshed }   // new examples appear inline — no toast needed
             }
             WindowManager.notifyDataChanged()
         }
+    }
+
+    /// Shows a self-dismissing corner toast at the user's configured position.
+    @MainActor private func notify(_ text: String, danger: Bool = false) {
+        ToastCenter.shared.corner = env.settings.toastPosition
+        ToastCenter.shared.notice(text, danger: danger)
     }
 
     // MARK: Synonyms / antonyms

@@ -63,6 +63,15 @@ final class ToastCenter {
         return model
     }
 
+    /// Shows a standalone, self-dismissing message toast (no actions) at the
+    /// configured corner — for detail-screen actions like "+ add example" or
+    /// reload that have no capture lifecycle to drive.
+    func notice(_ text: String, danger: Bool = false, dismissAfter seconds: TimeInterval = 2.5) {
+        let model = present()
+        model.phase = .notice(text: text, danger: danger)
+        scheduleDismiss(model, after: seconds)
+    }
+
     func dismiss(_ model: ToastModel) {
         guard let idx = items.firstIndex(where: { $0.model === model }) else { return }
         let item = items.remove(at: idx)

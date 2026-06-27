@@ -9,11 +9,14 @@ final class ToastModel: ObservableObject {
         case analyzing(String)
         case resolved(entry: Entry?, fallback: String, wasDuplicate: Bool)
         case error(String)
+        /// A standalone, self-dismissing message (no actions) — used by detail-screen
+        /// actions like "+ add example" / reload to confirm success or report a no-op.
+        case notice(text: String, danger: Bool)
     }
     @Published var phase: Phase = .analyzing("") {
         didSet {
             switch phase {
-            case .resolved, .error: if resolvedAt == nil { resolvedAt = Date() }
+            case .resolved, .error, .notice: if resolvedAt == nil { resolvedAt = Date() }
             case .analyzing: resolvedAt = nil
             }
             onResize?()
@@ -40,7 +43,7 @@ struct CaptureToastView: View {
             appIcon
             VStack(alignment: .leading, spacing: 0) { content }
                 .frame(maxWidth: .infinity, alignment: .leading)   // bounds FlowLayout so rows wrap, not squish
-            elapsedLabel
+            if showsElapsed { elapsedLabel }
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
         .frame(width: 344, alignment: .leading)
@@ -50,6 +53,13 @@ struct CaptureToastView: View {
 
     private var appIcon: some View {
         BrandBadge(size: 38, corner: 9)
+    }
+
+    /// The elapsed-time label is meaningful only for a capture's lifecycle, not a
+    /// standalone notice.
+    private var showsElapsed: Bool {
+        if case .notice = model.phase { return false }
+        return true
     }
 
     @ViewBuilder private var content: some View {
@@ -83,6 +93,17 @@ struct CaptureToastView: View {
         case .error(let message):
             Text(L.t("Capture failed", "Bắt từ thất bại")).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textDanger)
             Text(message).font(.system(size: 12)).foregroundStyle(Theme.textSecondary).padding(.top, 2).lineLimit(2)
+
+        case .notice(let text, let danger):
+            HStack(spacing: 6) {
+                Image(systemName: danger ? "exclamationmark.triangle" : "checkmark.circle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(danger ? Theme.textDanger : Theme.diffIns)
+                Text(text)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(danger ? Theme.textDanger : Theme.textPrimary)
+                    .lineLimit(2)
+            }
         }
     }
 

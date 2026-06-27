@@ -186,16 +186,27 @@ struct LibraryView: View {
         reloadingSenses = true
         Task {
             defer { reloadingSenses = false }
-            guard let fresh = try? await env.agy.defineWord(entry.rawText, language: entry.language)
-            else { return }
+            let fresh: WordCard
+            do {
+                fresh = try await env.agy.defineWord(entry.rawText, language: entry.language)
+            } catch {
+                await MainActor.run { notify(L.t("Couldn't update", "Không tải được"), danger: true) }
+                return
+            }
             let merged = CardDecoding.word(entry).map { fresh.merging($0) } ?? fresh
-            guard let json = try? merged.encodedJSON() else { return }
-            try? env.entries.setAiResult(id: id, aiResult: json)
-            if let refreshed = try? env.entries.entry(id: id) {
-                await MainActor.run {
-                    selected = refreshed
-                    detailReloadToken += 1
-                }
+            // Only confirm "Updated" after the write actually lands — a failed
+            // persist must not show success for an irreversible re-analysis.
+            do {
+                let json = try merged.encodedJSON()
+                try env.entries.setAiResult(id: id, aiResult: json)
+            } catch {
+                await MainActor.run { notify(L.t("Couldn't update", "Không tải được"), danger: true) }
+                return
+            }
+            let refreshed = try? env.entries.entry(id: id)
+            await MainActor.run {
+                if let refreshed { selected = refreshed; detailReloadToken += 1 }
+                notify(L.t("Updated", "Đã cập nhật"))
             }
             WindowManager.notifyDataChanged()
         }
@@ -210,19 +221,37 @@ struct LibraryView: View {
         reloadingSenses = true
         Task {
             defer { reloadingSenses = false }
-            guard let fresh = try? await env.agy.analyzePhrase(entry.rawText) else { return }
+            let fresh: PhraseCard
+            do {
+                fresh = try await env.agy.analyzePhrase(entry.rawText)
+            } catch {
+                await MainActor.run { notify(L.t("Couldn't update", "Không tải được"), danger: true) }
+                return
+            }
             let merged = CardDecoding.phrase(entry).map { fresh.merging($0) } ?? fresh
-            guard let data = try? JSONEncoder().encode(merged),
-                  let json = String(data: data, encoding: .utf8) else { return }
-            try? env.entries.setAiResult(id: id, aiResult: json)
-            if let refreshed = try? env.entries.entry(id: id) {
-                await MainActor.run {
-                    selected = refreshed
-                    detailReloadToken += 1
-                }
+            // Only confirm "Updated" after the write actually lands — a failed
+            // persist must not show success for an irreversible re-analysis.
+            do {
+                let data = try JSONEncoder().encode(merged)
+                let json = String(decoding: data, as: UTF8.self)
+                try env.entries.setAiResult(id: id, aiResult: json)
+            } catch {
+                await MainActor.run { notify(L.t("Couldn't update", "Không tải được"), danger: true) }
+                return
+            }
+            let refreshed = try? env.entries.entry(id: id)
+            await MainActor.run {
+                if let refreshed { selected = refreshed; detailReloadToken += 1 }
+                notify(L.t("Updated", "Đã cập nhật"))
             }
             WindowManager.notifyDataChanged()
         }
+    }
+
+    /// Shows a self-dismissing corner toast at the user's configured position.
+    @MainActor private func notify(_ text: String, danger: Bool = false) {
+        ToastCenter.shared.corner = env.settings.toastPosition
+        ToastCenter.shared.notice(text, danger: danger)
     }
 
     // MARK: Sidebar

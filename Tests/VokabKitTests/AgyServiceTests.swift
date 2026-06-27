@@ -23,6 +23,24 @@ final class AgyServiceTests: XCTestCase {
         XCTAssertTrue(runner.receivedPrompts.first?.contains("ephemeral") == true)
     }
 
+    func testMorePhraseExamplesDecodesAndSteersFromExisting() async throws {
+        let runner = MockAgyRunner(response: #"{"examples":["He looks forward to Fridays.","We look forward to the trip."]}"#)
+        let examples = try await service(runner).morePhraseExamples(
+            "look forward to", existing: ["I look forward to seeing you."])
+        XCTAssertEqual(examples.count, 2)
+        // The already-shown example is woven into the prompt so the model avoids it.
+        XCTAssertTrue(runner.receivedPrompts.first?.contains("I look forward to seeing you.") == true)
+    }
+
+    func testMoreWordExamplesDecodesAndSteersFromExisting() async throws {
+        let runner = MockAgyRunner(response: #"{"examples":["The bridge spans the river.","Her work spans decades."]}"#)
+        let examples = try await service(runner).moreWordExamples(
+            "span", language: "en", existing: ["The roof spans the hall."])
+        XCTAssertEqual(examples.count, 2)
+        XCTAssertTrue(runner.receivedPrompts.first?.contains("The roof spans the hall.") == true)
+        XCTAssertTrue(runner.receivedPrompts.first?.contains("language: en") == true)
+    }
+
     func testClassifyReturnsCategory() async throws {
         let runner = MockAgyRunner(response: #"{"category":"Technology"}"#)
         let category = try await service(runner).classify("router", language: "en", taxonomy: ["Technology"])

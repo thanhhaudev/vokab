@@ -137,14 +137,19 @@ struct LibraryView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     Spacer()
-                    if entry.cardType == .word {
+                    if entry.cardType == .word || entry.cardType == .phrase {
                         if reloadingSenses {
                             ProgressView().controlSize(.small)
                         } else {
-                            Button { reloadSenses(entry) } label: { Image(systemName: "arrow.clockwise") }
+                            let help = entry.cardType == .word
+                                ? L.t("Update senses", "Cập nhật nghĩa")
+                                : L.t("Update analysis", "Cập nhật phân tích")
+                            Button {
+                                if entry.cardType == .word { reloadSenses(entry) } else { reloadPhrase(entry) }
+                            } label: { Image(systemName: "arrow.clockwise") }
                                 .buttonStyle(.plain).foregroundStyle(Theme.textSecondary)
-                                .help(L.t("Update senses", "Cập nhật nghĩa"))
-                                .accessibilityLabel(L.t("Update senses", "Cập nhật nghĩa"))
+                                .help(help)
+                                .accessibilityLabel(help)
                         }
                     }
                     Button(role: .destructive) { pendingDelete = entry } label: { Image(systemName: "trash") }
@@ -156,7 +161,7 @@ struct LibraryView: View {
                 Group {
                     switch entry.cardType {
                     case .word:          WordDetailView(entry: entry).id("\(entry.id ?? 0)#\(detailReloadToken)")
-                    case .phrase:        PhraseDetailView(entry: entry).id(entry.id)
+                    case .phrase:        PhraseDetailView(entry: entry).id("\(entry.id ?? 0)#\(detailReloadToken)")
                     case .paragraphItem: ParagraphItemDetailView(entry: entry).id(entry.id)
                     case .none:          Text("Unknown entry").padding()
                     }
@@ -181,19 +186,72 @@ struct LibraryView: View {
         reloadingSenses = true
         Task {
             defer { reloadingSenses = false }
-            guard let fresh = try? await env.agy.defineWord(entry.rawText, language: entry.language)
-            else { return }
+            let fresh: WordCard
+            do {
+                fresh = try await env.agy.defineWord(entry.rawText, language: entry.language)
+            } catch {
+                await MainActor.run { notify(L.t("Couldn't update", "Không tải được"), danger: true) }
+                return
+            }
             let merged = CardDecoding.word(entry).map { fresh.merging($0) } ?? fresh
-            guard let json = try? merged.encodedJSON() else { return }
-            try? env.entries.setAiResult(id: id, aiResult: json)
-            if let refreshed = try? env.entries.entry(id: id) {
-                await MainActor.run {
-                    selected = refreshed
-                    detailReloadToken += 1
-                }
+            // Only confirm "Updated" after the write actually lands — a failed
+            // persist must not show success for an irreversible re-analysis.
+            do {
+                let json = try merged.encodedJSON()
+                try env.entries.setAiResult(id: id, aiResult: json)
+            } catch {
+                await MainActor.run { notify(L.t("Couldn't update", "Không tải được"), danger: true) }
+                return
+            }
+            let refreshed = try? env.entries.entry(id: id)
+            await MainActor.run {
+                if let refreshed { selected = refreshed; detailReloadToken += 1 }
+                notify(L.t("Updated", "Đã cập nhật"))
             }
             WindowManager.notifyDataChanged()
         }
+    }
+
+    /// Re-analyzes a phrase from scratch and folds the fresh card over the stored
+    /// one (fresh meaning/analysis wins; stored fields the fresh prompt omits
+    /// survive), then re-keys the detail. Repairs entries whose analysis dropped
+    /// the core meaning.
+    private func reloadPhrase(_ entry: Entry) {
+        guard let id = entry.id, !reloadingSenses else { return }
+        reloadingSenses = true
+        Task {
+            defer { reloadingSenses = false }
+            let fresh: PhraseCard
+            do {
+                fresh = try await env.agy.analyzePhrase(entry.rawText)
+            } catch {
+                await MainActor.run { notify(L.t("Couldn't update", "Không tải được"), danger: true) }
+                return
+            }
+            let merged = CardDecoding.phrase(entry).map { fresh.merging($0) } ?? fresh
+            // Only confirm "Updated" after the write actually lands — a failed
+            // persist must not show success for an irreversible re-analysis.
+            do {
+                let data = try JSONEncoder().encode(merged)
+                let json = String(decoding: data, as: UTF8.self)
+                try env.entries.setAiResult(id: id, aiResult: json)
+            } catch {
+                await MainActor.run { notify(L.t("Couldn't update", "Không tải được"), danger: true) }
+                return
+            }
+            let refreshed = try? env.entries.entry(id: id)
+            await MainActor.run {
+                if let refreshed { selected = refreshed; detailReloadToken += 1 }
+                notify(L.t("Updated", "Đã cập nhật"))
+            }
+            WindowManager.notifyDataChanged()
+        }
+    }
+
+    /// Shows a self-dismissing corner toast at the user's configured position.
+    @MainActor private func notify(_ text: String, danger: Bool = false) {
+        ToastCenter.shared.corner = env.settings.toastPosition
+        ToastCenter.shared.notice(text, danger: danger)
     }
 
     // MARK: Sidebar

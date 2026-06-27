@@ -10,6 +10,7 @@ struct WordDetailView: View {
     @EnvironmentObject private var env: AppEnvironment
     @State private var current: Entry
     @State private var enriching = false
+    @State private var addingExamples = false
     /// Measured content width; drives the 1-vs-2-column reference layout.
     @State private var contentWidth: CGFloat = 0
     private let context: DetailContext
@@ -315,27 +316,99 @@ struct WordDetailView: View {
     // MARK: Examples
 
     @ViewBuilder private var examples: some View {
-        if let ex = card?.examples, !ex.isEmpty {
+        if card != nil {
             VStack(alignment: .leading, spacing: 8) {
-                SecLabel("Examples")
-                ForEach(ex, id: \.self) { example in
-                    HStack(alignment: .top, spacing: 8) {
-                        InteractiveText(sentence: example, knownPhrases: knownPhrases, language: entry.language)
-                            .lineSpacing(3)
-                            .padding(.leading, 10)
-                            .overlay(alignment: .leading) {
-                                Rectangle().fill(Theme.borderSecondary).frame(width: 2)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        PronounceButton(text: example,
-                                        accent: Accent(settingsValue: env.settings.pronunciationAccent),
-                                        size: .small)
+                HStack(spacing: 6) {
+                    SecLabel("Examples")
+                    if addingExamples {
+                        ProgressView().controlSize(.small).scaleEffect(0.7)
+                    } else {
+                        Button { addExamples() } label: {
+                            Image(systemName: "plus.circle").font(.system(size: 12))
+                        }
+                        .buttonStyle(.plain).foregroundStyle(Theme.textSecondary)
+                        .help(L.t("Add an example", "Thêm ví dụ"))
+                        .accessibilityLabel(L.t("Add an example", "Thêm ví dụ"))
                     }
+                    Spacer(minLength: 0)
                 }
+                examplesList
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 14)
         }
+    }
+
+    /// Example rows: content-sized for a few, capped + internally scrollable once long.
+    @ViewBuilder private var examplesList: some View {
+        let ex = card?.examples ?? []
+        if ex.isEmpty {
+            Text(L.t("No examples yet.", "Chưa có ví dụ."))
+                .font(.system(size: 13)).foregroundStyle(Theme.textTertiary)
+        } else {
+            let rows = VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(ex.enumerated()), id: \.offset) { _, example in
+                    exampleRow(example)
+                }
+            }
+            if ex.count > 3 {
+                ScrollView { rows }.frame(maxHeight: 200)
+            } else {
+                rows
+            }
+        }
+    }
+
+    private func exampleRow(_ example: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            InteractiveText(sentence: example, knownPhrases: knownPhrases, language: entry.language)
+                .lineSpacing(3)
+                .padding(.leading, 10)
+                .overlay(alignment: .leading) { Rectangle().fill(Theme.borderSecondary).frame(width: 2) }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            PronounceButton(text: example,
+                            accent: Accent(settingsValue: env.settings.pronunciationAccent),
+                            size: .small)
+        }
+    }
+
+    /// Fetches more examples from agy and appends the unique ones to the stored card.
+    private func addExamples() {
+        guard let id = entry.id, !addingExamples, var c = card else { return }
+        addingExamples = true
+        Task {
+            defer { addingExamples = false }
+            let more: [String]
+            do {
+                more = try await env.agy.moreWordExamples(entry.rawText, language: entry.language,
+                                                          existing: c.examples)
+            } catch {
+                await MainActor.run { notify(L.t("Couldn't load examples", "Không tải được ví dụ"), danger: true) }
+                return
+            }
+            let merged = ExampleMatching.merge(c.examples, adding: more)
+            guard merged.count > c.examples.count else {     // all duplicates / nothing new
+                await MainActor.run { notify(L.t("No new examples", "Không có ví dụ mới")) }
+                return
+            }
+            c.examples = merged
+            do {
+                try env.entries.setAiResult(id: id, aiResult: c.encodedJSON())
+            } catch {
+                await MainActor.run { notify(L.t("Couldn't add examples", "Không thêm được ví dụ"), danger: true) }
+                return
+            }
+            if let refreshed = try? env.entries.entry(id: id) {
+                await MainActor.run { current = refreshed }   // new examples appear inline — no toast needed
+            }
+            WindowManager.notifyDataChanged()
+        }
+    }
+
+    /// Shows a self-dismissing corner toast at the user's configured position.
+    @MainActor private func notify(_ text: String, danger: Bool = false) {
+        ToastCenter.shared.corner = env.settings.toastPosition
+        ToastCenter.shared.notice(text, danger: danger)
     }
 
     // MARK: Synonyms / antonyms

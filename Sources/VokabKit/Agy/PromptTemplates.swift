@@ -26,6 +26,8 @@ public enum PromptTemplates {
          register, cefr_level, separable, object_type, usage_note,
          examples[], variations[], common_errors[], related_phrases[]}
         "meaning" = the definition in \(meaningLanguage); "meaning_en" = the definition in English.
+        "meaning" and "meaning_en" are REQUIRED — always include both, never omit
+        them, even for long, slang, or vulgar phrases.
         No preamble, no markdown fence.
         """
     }
@@ -195,6 +197,46 @@ public enum PromptTemplates {
         Vietnamese explanation.
         context_of_use: 1–2 sentence Vietnamese learner note on the situation/context to use this phrase (formal/informal nuance, domain, when/where).
         grammar_note: 1–2 sentence Vietnamese note on the grammatical pattern and tense this phrase is typically used in.
+        No preamble, no markdown fence.
+        """
+    }
+
+    /// Backfill just the core meaning for phrases whose analysis dropped it (the
+    /// model sometimes omits `meaning`/`meaning_en` for long/slang/vulgar phrases).
+    public static func phraseMeaningBackfill(_ phrase: String, meaningLanguage: String) -> String {
+        """
+        For the phrase '\(phrase)' return ONLY JSON:
+        {meaning, meaning_en}
+        "meaning" = the definition in \(meaningLanguage); "meaning_en" = the definition in English.
+        Both are REQUIRED — never omit either, even for long, slang, or vulgar phrases.
+        No preamble, no markdown fence.
+        """
+    }
+
+    /// Generate additional example sentences for a phrase, on demand (the "+" in
+    /// the phrase detail's Examples section). Steers away from the ones already shown.
+    public static func phraseMoreExamples(_ phrase: String, existing: [String]) -> String {
+        let shown = existing.isEmpty ? "(none yet)" : existing.map { "- \($0)" }.joined(separator: "\n")
+        return """
+        For the phrase '\(phrase)' return ONLY JSON:
+        {examples[]}
+        examples[] = 2 NEW, natural example sentences that use the phrase, each in a
+        DIFFERENT context. They MUST be different from these already shown:
+        \(shown)
+        No preamble, no markdown fence.
+        """
+    }
+
+    /// Generate additional example sentences for a single word, on demand (the
+    /// "+" in the word detail's Examples section). Steers away from existing ones.
+    public static func wordMoreExamples(_ word: String, language: String, existing: [String]) -> String {
+        let shown = existing.isEmpty ? "(none yet)" : existing.map { "- \($0)" }.joined(separator: "\n")
+        return """
+        For the word '\(word)' (language: \(language)) return ONLY JSON:
+        {examples[]}
+        examples[] = 2 NEW, natural example sentences that use the word, each in a
+        DIFFERENT context. They MUST be different from these already shown:
+        \(shown)
         No preamble, no markdown fence.
         """
     }

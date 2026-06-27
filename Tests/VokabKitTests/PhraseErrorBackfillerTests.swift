@@ -22,6 +22,28 @@ final class PhraseErrorBackfillerTests: XCTestCase {
         XCTAssertEqual(card.meaning, "từ bỏ")
     }
 
+    func testBackfillsMissingMeaningWhenAnalysisDroppedIt() async throws {
+        let queue = try VokabDatabase.makeInMemory()
+        let entries = EntryRepository(dbQueue: queue)
+        // Enriched phrase with errors/context/grammar present but NO meaning —
+        // the model dropped the core gloss (seen on long/slang/vulgar phrases).
+        let stored = #"{"common_errors":[{"sentence":"a _____","answer":"x","options":["x"]}],"context_of_use":"ctx","grammar_note":"gram"}"#
+        let id = try entries.insertCapture(
+            Entry(rawText: "act cute", type: CardType.phrase.rawValue, language: "en",
+                  capturedAt: Date(), aiResult: stored), dueDate: Date())
+
+        let agy = AgyService(
+            runner: MockAgyRunner(response: #"{"meaning":"giả vờ đáng yêu","meaning_en":"to act endearingly"}"#),
+            settings: VokabSettings())
+        let backfiller = PhraseErrorBackfiller(agy: agy, entries: entries)
+        _ = try await backfiller.backfill(entry: entries.entry(id: id)!)
+
+        let card = try JSONCleaning.decode(PhraseCard.self, from: entries.entry(id: id)!.aiResult)
+        XCTAssertEqual(card.meaning, "giả vờ đáng yêu")           // filled
+        XCTAssertEqual(card.meaningEn, "to act endearingly")      // filled
+        XCTAssertEqual(card.commonErrors.first?.answer, "x")      // existing field preserved
+    }
+
     func testSkipsWord() async throws {
         let queue = try VokabDatabase.makeInMemory()
         let entries = EntryRepository(dbQueue: queue)

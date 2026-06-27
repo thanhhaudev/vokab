@@ -9,6 +9,7 @@ struct PhraseDetailView: View {
     @State private var enriching = false
     @State private var tab: Tab = .variations
     @State private var showLegend = false
+    @State private var addingExamples = false
     private let context: DetailContext
 
     init(entry: Entry, context: DetailContext = .library) {
@@ -26,6 +27,15 @@ struct PhraseDetailView: View {
     private var entry: Entry { current }
     private var card: PhraseCard? { CardDecoding.phrase(current) }
 
+    /// Phrases to underline as a unit inside example/seen-in sentences: the phrase
+    /// itself plus any multi-word variations and related phrases.
+    private var knownPhrases: [String] {
+        let c = card
+        return [entry.rawText]
+            + (c?.variations ?? [])
+            + (c?.relatedPhrases ?? []).filter { $0.trimmingCharacters(in: .whitespaces).contains(" ") }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -36,6 +46,7 @@ struct PhraseDetailView: View {
                         failedView
                     } else {
                         phraseRow
+                        metaStrip
                         formulaBox
                         Hairline()
                         seenIn
@@ -66,7 +77,8 @@ struct PhraseDetailView: View {
                 WindowManager.notifyDataChanged()
             }
             if current.cardType == .phrase, let c = CardDecoding.phrase(current),
-               c.commonErrors.isEmpty || c.contextOfUse == nil || c.grammarNote == nil,
+               c.commonErrors.isEmpty || c.contextOfUse == nil || c.grammarNote == nil
+                   || ((c.meaning?.isEmpty != false) && (c.meaningEn?.isEmpty != false)),
                let updated = try? await env.phraseErrorBackfiller.backfill(entry: current) {
                 current = updated
                 WindowManager.notifyDataChanged()
@@ -197,6 +209,41 @@ struct PhraseDetailView: View {
         .padding(14)
     }
 
+    // MARK: Meta strip (reference facts about the phrase)
+
+    /// A compact reference line under the phrase identity: register, CEFR and
+    /// separability. Type is intentionally omitted — it already shows in the
+    /// header meta ("· English · Phrasal verb").
+    @ViewBuilder private var metaStrip: some View {
+        let hasRegister = (card?.register?.isEmpty == false)
+        let hasCefr = (card?.cefrLevel?.cefrLevel != nil)
+        let hasSeparable = (card?.separable != nil)
+        if hasRegister || hasCefr || hasSeparable {
+            FlowLayout(spacing: 14, lineSpacing: 6) {
+                if let reg = card?.register, !reg.isEmpty {
+                    metaFact(L.t("Register", "Văn phong")) { MultiPill(reg, style: .register) }
+                }
+                if let cefr = card?.cefrLevel, cefr.cefrLevel != nil {
+                    metaFact("CEFR") { Pill.cefr(cefr) }
+                }
+                if let sep = card?.separable {
+                    metaFact(L.t("Separable", "Tách được")) {
+                        Text(sep ? L.t("Yes", "Có") : L.t("No", "Không"))
+                            .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                    }
+                }
+            }
+            .padding(.horizontal, 16).padding(.bottom, 12)
+        }
+    }
+
+    private func metaFact<V: View>(_ key: String, @ViewBuilder _ value: () -> V) -> some View {
+        HStack(spacing: 6) {
+            Text(key).font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
+            value()
+        }
+    }
+
     // MARK: Formula box
 
     @ViewBuilder private var formulaBox: some View {
@@ -247,25 +294,22 @@ struct PhraseDetailView: View {
 
     private var twoColumns: some View {
         HStack(alignment: .top, spacing: 0) {
-            VStack(alignment: .leading, spacing: 7) {
-                SecLabel("Analysis")
-                if let type = card?.type, !type.isEmpty { defRowMulti("Type", raw: type, style: .type) }
-                if let register = card?.register, !register.isEmpty { defRowMulti("Register", raw: register, style: .register) }
-                if let cefr = card?.cefrLevel, cefr.cefrLevel != nil { defRow("CEFR", pill: Pill.cefr(cefr)) }
-                if let sep = card?.separable {
-                    defRow("Separable?", value: sep ? "Yes" : "No")
-                }
-                if let example = card?.examples.first {
-                    HStack(alignment: .top, spacing: 8) {
-                        Text(EnglishDisplay.sentence(example)).font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
-                            .padding(.leading, 10).padding(.top, 4)
-                            .overlay(alignment: .leading) { Rectangle().fill(Theme.borderSecondary).frame(width: 2) }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        PronounceButton(text: example,
-                                        accent: Accent(settingsValue: env.settings.pronunciationAccent),
-                                        size: .small)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    SecLabel("Examples")
+                    if addingExamples {
+                        ProgressView().controlSize(.small).scaleEffect(0.7)
+                    } else {
+                        Button { addExamples() } label: {
+                            Image(systemName: "plus.circle").font(.system(size: 12))
+                        }
+                        .buttonStyle(.plain).foregroundStyle(Theme.textSecondary)
+                        .help(L.t("Add an example", "Thêm ví dụ"))
+                        .accessibilityLabel(L.t("Add an example", "Thêm ví dụ"))
                     }
+                    Spacer(minLength: 0)
                 }
+                examplesList
             }
             .frame(maxWidth: .infinity, alignment: .leading).padding(14)
 
@@ -277,13 +321,77 @@ struct PhraseDetailView: View {
                     Text(m).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.textPrimary)
                 }
                 if let en = card?.meaningEn, en != card?.meaning(forLanguage: env.settings.meaningLanguage) {
-                    Text(en).font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineSpacing(3)
+                    InteractiveText(sentence: en, knownPhrases: knownPhrases, language: entry.language,
+                                    fontSize: 13, color: Theme.textSecondary)
+                        .lineSpacing(3)
                 }
                 if let note = card?.usageNote {
-                    Text(note).font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineSpacing(2).padding(.top, 2)
+                    // English usage explanation — tappable for lookup/capture.
+                    InteractiveText(sentence: note, knownPhrases: knownPhrases, language: entry.language,
+                                    fontSize: 13, color: Theme.textSecondary)
+                        .lineSpacing(2).padding(.top, 2)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading).padding(14)
+        }
+    }
+
+    /// The example rows: content-sized for a few, but capped + internally
+    /// scrollable once the list grows long (so it doesn't unbalance the columns).
+    @ViewBuilder private var examplesList: some View {
+        let examples = card?.examples ?? []
+        if examples.isEmpty {
+            Text(L.t("No examples yet.", "Chưa có ví dụ."))
+                .font(.system(size: 13)).foregroundStyle(Theme.textTertiary)
+        } else {
+            let rows = VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(examples.enumerated()), id: \.offset) { _, example in
+                    exampleRow(example)
+                }
+            }
+            if examples.count > 3 {
+                ScrollView { rows }.frame(maxHeight: 200)
+            } else {
+                rows
+            }
+        }
+    }
+
+    private func exampleRow(_ example: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            InteractiveText(sentence: EnglishDisplay.sentence(example),
+                            knownPhrases: knownPhrases, language: entry.language)
+                .lineSpacing(3)
+                .padding(.leading, 10)
+                .overlay(alignment: .leading) { Rectangle().fill(Theme.borderSecondary).frame(width: 2) }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            PronounceButton(text: example,
+                            accent: Accent(settingsValue: env.settings.pronunciationAccent),
+                            size: .small)
+        }
+    }
+
+    /// Fetches more examples from agy and appends the unique ones to the stored card.
+    private func addExamples() {
+        guard let id = entry.id, !addingExamples, var c = card else { return }
+        addingExamples = true
+        Task {
+            defer { addingExamples = false }
+            guard let more = try? await env.agy.morePhraseExamples(entry.rawText, existing: c.examples),
+                  !more.isEmpty else { return }
+            var merged = c.examples
+            for ex in more where !merged.contains(where: { $0.caseInsensitiveCompare(ex) == .orderedSame }) {
+                merged.append(ex)
+            }
+            guard merged.count > c.examples.count else { return }   // all duplicates
+            c.examples = merged
+            guard let data = try? JSONEncoder().encode(c),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            try? env.entries.setAiResult(id: id, aiResult: json)
+            if let refreshed = try? env.entries.entry(id: id) {
+                await MainActor.run { current = refreshed }
+            }
+            WindowManager.notifyDataChanged()
         }
     }
 
@@ -293,8 +401,9 @@ struct PhraseDetailView: View {
         if let sentence = entry.captureSentence {
             VStack(alignment: .leading, spacing: 8) {
                 SecLabel("Seen in")
-                HighlightedSentence(sentence: sentence, target: entry.rawText)
-                    .font(.system(size: 13)).lineSpacing(3)
+                InteractiveText(sentence: sentence, knownPhrases: knownPhrases,
+                                language: entry.language, highlight: entry.rawText)
+                    .lineSpacing(3)
                     .padding(.leading, 10)
                     .overlay(alignment: .leading) { Rectangle().fill(Theme.accent).frame(width: 2) }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -331,20 +440,6 @@ struct PhraseDetailView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 14)
-        }
-    }
-
-    private func defRow(_ key: String, pill: Pill) -> some View {
-        HStack { Text(key).font(.system(size: 13)).foregroundStyle(Theme.textSecondary); Spacer(); pill }
-    }
-    private func defRowMulti(_ key: String, raw: String, style: PillStyle) -> some View {
-        HStack { Text(key).font(.system(size: 13)).foregroundStyle(Theme.textSecondary); Spacer(); MultiPill(raw, style: style) }
-    }
-    private func defRow(_ key: String, value: String) -> some View {
-        HStack {
-            Text(key).font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-            Spacer()
-            Text(value).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.textPrimary)
         }
     }
 
@@ -455,13 +550,16 @@ struct PhraseDetailView: View {
                 let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(items, id: \.self) { item in
-                        Text(item)
-                            .font(.system(size: 13))
-                            .foregroundStyle(danger ? Theme.textDanger : Theme.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 12).padding(.vertical, 10)
-                            .background(danger ? Theme.bgDanger : Theme.bgSecondary,
-                                        in: RoundedRectangle(cornerRadius: Theme.radiusMd))
+                        InteractiveToken(text: item, hint: .phrase, language: entry.language,
+                                         underlineOnHover: false) {
+                            Text(item)
+                                .font(.system(size: 13))
+                                .foregroundStyle(danger ? Theme.textDanger : Theme.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12).padding(.vertical, 10)
+                                .background(danger ? Theme.bgDanger : Theme.bgSecondary,
+                                            in: RoundedRectangle(cornerRadius: Theme.radiusMd))
+                        }
                     }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
@@ -482,8 +580,10 @@ struct PhraseDetailView: View {
             } else if items.isEmpty {
                 Text(L.t("Nothing here.", "Chưa có.")).font(.system(size: 13)).foregroundStyle(Theme.textTertiary).padding(16)
             } else {
-                FlowLayout(spacing: 6) { ForEach(items, id: \.self) { Chip($0) } }
-                    .padding(.horizontal, 16).padding(.vertical, 14)
+                FlowLayout(spacing: 6) {
+                    ForEach(items, id: \.self) { InteractiveChip(text: $0, language: entry.language) }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 14)
             }
         }
     }

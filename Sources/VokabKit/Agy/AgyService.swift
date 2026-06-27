@@ -104,6 +104,27 @@ public struct AgyService: Sendable {
         try await callAndDecode(PhraseCard.self, prompt: PromptTemplates.phraseErrorsBackfill(phrase),
                                 model: settings.enrichModel)
     }
+    /// Returns a PARTIAL PhraseCard with only `meaning`/`meaningEn` populated, for
+    /// phrases whose analysis dropped them. Fold into the stored card via `merging`.
+    public func backfillPhraseMeaning(_ phrase: String) async throws -> PhraseCard {
+        tagged(try await callAndDecode(PhraseCard.self,
+            prompt: PromptTemplates.phraseMeaningBackfill(phrase, meaningLanguage: meaningLanguageName),
+            model: settings.enrichModel))
+    }
+    /// Generates additional example sentences for a phrase, avoiding the `existing`
+    /// ones. Returns just the new examples (caller appends + dedupes).
+    public func morePhraseExamples(_ phrase: String, existing: [String]) async throws -> [String] {
+        try await callAndDecode(PhraseCard.self,
+            prompt: PromptTemplates.phraseMoreExamples(phrase, existing: existing),
+            model: settings.enrichModel).examples
+    }
+    /// Generates additional example sentences for a single word, avoiding the
+    /// `existing` ones. Returns just the new examples (caller appends + dedupes).
+    public func moreWordExamples(_ word: String, language: String, existing: [String]) async throws -> [String] {
+        try await callAndDecode(WordCard.self,
+            prompt: PromptTemplates.wordMoreExamples(word, language: language, existing: existing),
+            model: settings.enrichModel).examples
+    }
 
     public func extractFromParagraph(_ paragraph: String, taxonomy: [String]) async throws -> ParagraphExtraction {
         try await extractFromParagraph(paragraph, minLevel: settings.minParagraphLevel, taxonomy: taxonomy)

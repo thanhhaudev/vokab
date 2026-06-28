@@ -84,7 +84,7 @@ final class CaptureController: ObservableObject {
                 else { language = fallbackLanguage }
                 do {
                     let began = try env.capture.beginCapture(text: trimmed, language: language,
-                                                             source: src, forcedType: forcedType)
+                                                             source: src, forcedType: forcedType, lemmatize: lemmatize)
                     switch began {
                     case .paragraph:
                         // Paragraph: fall through to the original async path so the

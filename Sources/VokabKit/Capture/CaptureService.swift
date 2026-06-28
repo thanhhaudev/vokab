@@ -96,18 +96,21 @@ public struct CaptureService: Sendable {
     /// Pha ĐỒNG BỘ (tức thì): classify → dedup → cache → quota; word/phrase miss →
     /// chèn entry "analyzing" và trả `.pending`. KHÔNG gọi agy.
     public func beginCapture(text: String, language: String, source: SourceContext,
-                             forcedType: CardType? = nil) throws -> BeganCapture {
+                             forcedType: CardType? = nil, lemmatize: Bool = true) throws -> BeganCapture {
         let type = forcedType ?? InputClassifier.classify(text)
         let cleaned = InputCleaner.clean(text, type: type == .paragraphItem ? .word : type)
         let now = source.capturedAt
         guard !cleaned.isEmpty else { return .empty }
         guard type == .word || type == .phrase else { return .paragraph }
 
-        // Dedup on the lemma key first, then on a previously-captured surface form
-        // (so re-capturing an inflection like "running" that already collapsed into
-        // "run" doesn't re-spend an agy call/quota).
-        if let existing = try entries.find(rawText: cleaned, language: language)
-            ?? entries.findByCapturedForm(cleaned, language: language) {
+        // Exact raw_text dup always blocks. Captured-surface alias dedup (so
+        // re-capturing "ran" doesn't re-spend an agy call) applies ONLY when
+        // lemmatizing — Keep Original (lemmatize:false) must be able to create the
+        // surface as its own entry even though it's an alias of the lemma.
+        if let existing = try entries.find(rawText: cleaned, language: language) {
+            return .duplicate(entryId: existing.id ?? -1, type: existing.cardType ?? type)
+        }
+        if lemmatize, let existing = try entries.findByAlias(cleaned, language: language) {
             return .duplicate(entryId: existing.id ?? -1, type: existing.cardType ?? type)
         }
         if let cached = try cache.lookup(text: cleaned, language: language, meaningLanguage: settings.meaningLanguage) {

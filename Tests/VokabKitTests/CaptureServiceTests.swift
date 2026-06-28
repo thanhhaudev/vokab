@@ -359,19 +359,53 @@ final class CaptureServiceTests: XCTestCase {
         if case .duplicate = try h.capture.beginCapture(text: "stubborn", language: "en", source: src) {} else { XCTFail() }
     }
 
-    /// Re-capturing the exact inflected surface of an already-lemmatized word must
-    /// dedupe (no new pending row, no agy call, no quota) — the surface lives on the
-    /// lemma row's `captured_form`.
-    func test_beginCapture_dedupesRepeatInflection_bySurface() throws {
+    /// Re-capturing an inflected surface recorded as an alias of its lemma dedupes
+    /// (no new pending row, no agy call, no quota).
+    func test_beginCapture_dedupesRepeatInflection_byAlias() throws {
         let h = try makeHarnessForAsync(wordJSON: "{}")
         let src = SourceContext(appName: "t", url: nil, capturedAt: Date())
-        // An earlier "running" capture that was lemmatized to "run".
-        _ = try h.entries.insertCapture(
-            Entry(rawText: "run", type: "word", language: "en", capturedAt: Date(),
-                  aiResult: "{}", capturedForm: "running"),
+        let id = try h.entries.insertCapture(
+            Entry(rawText: "run", type: "word", language: "en", capturedAt: Date(), aiResult: "{}"),
             dueDate: Date())
+        try h.entries.addAlias(entryId: id, surface: "running", language: "en")
         let began = try h.capture.beginCapture(text: "running", language: "en", source: src)
         guard case .duplicate = began else { return XCTFail("expected duplicate, got \(began)") }
+    }
+
+    /// Codex finding 2: Keep Original re-captures the surface with lemmatize:false,
+    /// which must BYPASS the alias dedup (else the opt-out can never create the
+    /// surface card). An exact raw_text dup still blocks.
+    func test_beginCapture_lemmatizeFalse_bypassesAliasDedup() throws {
+        let h = try makeHarnessForAsync(wordJSON: "{}")
+        let src = SourceContext(appName: "t", url: nil, capturedAt: Date())
+        let id = try h.entries.insertCapture(
+            Entry(rawText: "run", type: "word", language: "en", capturedAt: Date(), aiResult: "{}"),
+            dueDate: Date())
+        try h.entries.addAlias(entryId: id, surface: "running", language: "en")
+        // lemmatize:true → deduped to the lemma.
+        if case .duplicate = try h.capture.beginCapture(text: "running", language: "en", source: src) {} else {
+            return XCTFail("lemmatize:true should dedupe via alias")
+        }
+        // lemmatize:false (Keep Original) → NOT a duplicate; proceeds to create the surface.
+        let began = try h.capture.beginCapture(text: "running", language: "en", source: src, lemmatize: false)
+        if case .duplicate = began { XCTFail("lemmatize:false must bypass alias dedup, got \(began)") }
+    }
+
+    /// Codex finding 1 end-to-end: capture "ran" into an existing ready "run" via
+    /// the async path, then beginCapture("ran") again dedupes (no re-analysis).
+    func test_repeatMergeInflection_dedupesAfterAnalysis() async throws {
+        let h = try makeHarnessForAsync(wordJSON: #"{"headword":"run"}"#)
+        let src = SourceContext(appName: "t", url: nil, capturedAt: Date())
+        _ = try h.entries.insertCapture(
+            Entry(rawText: "run", type: "word", language: "en", capturedAt: Date(),
+                  aiResult: "{}", analysisState: AnalysisState.ready.rawValue),
+            dueDate: Date())
+        guard case let .pending(id, _) = try h.capture.beginCapture(text: "ran", language: "en", source: src)
+        else { return XCTFail() }
+        _ = await h.capture.runAnalysis(entryId: id)         // merges "ran" into "run", records alias
+        // Second "ran" capture must dedupe without a pending row.
+        let again = try h.capture.beginCapture(text: "ran", language: "en", source: src)
+        guard case .duplicate = again else { return XCTFail("expected duplicate after merge, got \(again)") }
     }
 
     // MARK: - Chunked paragraph extraction (Task 7)

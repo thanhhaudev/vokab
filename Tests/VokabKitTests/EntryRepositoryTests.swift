@@ -127,14 +127,55 @@ final class ResolveHeadwordTests: XCTestCase {
         XCTAssertFalse(survivor.aiResult.contains("CLOBBER"))      // ours did not overwrite it
     }
 
-    func test_findByCapturedForm_matchesNormalizedSurface() throws {
+    func test_addAlias_findByAlias_roundtrip() throws {
         let queue = try VokabDatabase.makeInMemory()
         let repo = EntryRepository(dbQueue: queue)
-        _ = try repo.insertCapture(
-            Entry(rawText: "run", type: "word", language: "en", capturedAt: Date(),
-                  aiResult: "{}", capturedForm: "running"),
+        let id = try repo.insertCapture(
+            Entry(rawText: "run", type: "word", language: "en", capturedAt: Date(), aiResult: "{}"),
             dueDate: Date())
-        XCTAssertEqual(try repo.findByCapturedForm("Running", language: "en")?.rawText, "run")
-        XCTAssertNil(try repo.findByCapturedForm("walking", language: "en"))
+        try repo.addAlias(entryId: id, surface: "Running", language: "en")
+        XCTAssertEqual(try repo.findByAlias("running", language: "en")?.rawText, "run")
+        XCTAssertNil(try repo.findByAlias("walking", language: "en"))
+    }
+
+    func test_delete_removesAliases() throws {
+        let queue = try VokabDatabase.makeInMemory()
+        let repo = EntryRepository(dbQueue: queue)
+        let id = try repo.insertCapture(
+            Entry(rawText: "run", type: "word", language: "en", capturedAt: Date(), aiResult: "{}"),
+            dueDate: Date())
+        try repo.addAlias(entryId: id, surface: "ran", language: "en")
+        try repo.delete(id: id)
+        XCTAssertNil(try repo.findByAlias("ran", language: "en"))   // alias gone with the entry
+    }
+
+    /// Rename records the captured surface as an alias.
+    func test_rename_recordsAlias() throws {
+        let queue = try VokabDatabase.makeInMemory()
+        let repo = EntryRepository(dbQueue: queue)
+        let id = try pending(repo, surface: "running")
+        _ = try repo.resolveHeadwordAndMarkAnalyzed(
+            id: id, headword: "run", capturedForm: "running", language: "en",
+            aiResult: #"{"headword":"run"}"#, cefr: nil, frequency: nil, category: nil,
+            captureSentence: nil, sourceApp: nil, sourceURL: nil)
+        XCTAssertEqual(try repo.findByAlias("running", language: "en")?.id, id)
+    }
+
+    /// Codex finding 1: merging an inflection into an existing lemma must record the
+    /// merged surface as an alias on the survivor, so re-capturing it dedupes.
+    func test_merge_recordsAliasOnSurvivor() throws {
+        let queue = try VokabDatabase.makeInMemory()
+        let repo = EntryRepository(dbQueue: queue)
+        let existing = try repo.insertCapture(
+            Entry(rawText: "run", type: "word", language: "en", capturedAt: Date(),
+                  aiResult: "{}", analysisState: AnalysisState.ready.rawValue),
+            dueDate: Date())
+        let pendingId = try pending(repo, surface: "ran")
+        let res = try repo.resolveHeadwordAndMarkAnalyzed(
+            id: pendingId, headword: "run", capturedForm: "ran", language: "en",
+            aiResult: #"{"headword":"run"}"#, cefr: nil, frequency: nil, category: nil,
+            captureSentence: nil, sourceApp: nil, sourceURL: nil)
+        XCTAssertEqual(res, .mergedInto(existingId: existing))
+        XCTAssertEqual(try repo.findByAlias("ran", language: "en")?.id, existing)   // alias → survivor
     }
 }

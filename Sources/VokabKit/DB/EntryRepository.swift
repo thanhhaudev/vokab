@@ -53,21 +53,39 @@ public struct EntryRepository: Sendable {
         }
     }
 
-    /// Dedup lookup by a previously-captured SURFACE form (`captured_form`). After a
-    /// word is lemmatized (`running` → `run`), the surface lives on the lemma row's
-    /// `captured_form`; re-capturing that exact inflection would otherwise miss the
-    /// `normalized_text` dedup and re-spend an agy call/quota. `captured_form` stores
-    /// the cleaned (case-preserved) surface, so `lower(captured_form)` equals
-    /// `TextKey.normalize(surface)` for word captures — an exact canonical match.
-    public func findByCapturedForm(_ surface: String, language: String) throws -> Entry? {
+    /// Dedup lookup by a recorded captured-surface alias (e.g. "ran" → the "run"
+    /// entry). After a word is lemmatized, every surface it was reached by is recorded
+    /// in `entry_aliases`, so re-capturing any inflection dedupes without a fresh agy
+    /// call — for BOTH the rename and merge-into-existing paths (unlike a single
+    /// `captured_form` column, which can't hold multiple aliases or the merge case).
+    public func findByAlias(_ surface: String, language: String) throws -> Entry? {
         let key = TextKey.normalize(surface)
         guard !key.isEmpty else { return nil }
         return try dbQueue.read { db in
-            try Entry
-                .filter(sql: "lower(captured_form) = ? AND lower(language) = ?",
-                        arguments: [key, language.lowercased()])
-                .fetchOne(db)
+            try Entry.fetchOne(db, sql: """
+                SELECT e.* FROM entries e
+                JOIN entry_aliases a ON a.entry_id = e.id
+                WHERE a.normalized_surface = ? AND lower(a.language) = lower(?)
+                LIMIT 1
+                """, arguments: [key, language])
         }
+    }
+
+    /// Records a captured SURFACE form as a dedup alias of `entryId`. The normalized
+    /// surface maps to at most one entry per language; a surface already aliased
+    /// elsewhere is left untouched (`INSERT OR IGNORE`).
+    public func addAlias(entryId: Int64, surface: String, language: String) throws {
+        let key = TextKey.normalize(surface)
+        guard !key.isEmpty else { return }
+        try dbQueue.write { db in try Self.insertAlias(db, entryId: entryId, key: key, language: language) }
+    }
+
+    /// Shared alias insert — used by `addAlias` and inside
+    /// `resolveHeadwordAndMarkAnalyzed`'s write transaction. `key` is already normalized.
+    static func insertAlias(_ db: Database, entryId: Int64, key: String, language: String) throws {
+        guard !key.isEmpty else { return }
+        try db.execute(sql: "INSERT OR IGNORE INTO entry_aliases (entry_id, normalized_surface, language) VALUES (?, ?, ?)",
+                       arguments: [entryId, key, language])
     }
 
     /// Batch dedup lookup: of the given `texts`, returns the set of normalized keys
@@ -98,7 +116,11 @@ public struct EntryRepository: Sendable {
     }
 
     public func delete(id: Int64) throws {
-        _ = try dbQueue.write { db in try Entry.deleteOne(db, key: id) }
+        _ = try dbQueue.write { db in
+            // Explicit alias cleanup (don't depend on the FK pragma being on).
+            try db.execute(sql: "DELETE FROM entry_aliases WHERE entry_id = ?", arguments: [id])
+            return try Entry.deleteOne(db, key: id)
+        }
     }
 
     /// Sets (or clears) an entry's category. Used by capture, lazy backfill, and
@@ -216,6 +238,10 @@ public struct EntryRepository: Sendable {
                         """, arguments: [aiResult, cefr?.lowercased(), frequency, category, existingId])
                 }
                 try db.execute(sql: "DELETE FROM entries WHERE id = ?", arguments: [id])
+                // Record the merged surface as a dedup alias of the survivor, so
+                // re-capturing this inflection dedupes (the single captured_form
+                // column on the survivor can't, and isn't touched here).
+                try Self.insertAlias(db, entryId: existingId, key: TextKey.normalize(capturedForm), language: language)
                 return .mergedInto(existingId: existingId)
             }
             // No conflict: rename this entry to the headword and mark it analyzed.
@@ -226,6 +252,8 @@ public struct EntryRepository: Sendable {
                 WHERE id = ? AND analysis_state = 'analyzing'
                 """, arguments: [headword, normalizedHeadword, capturedForm,
                                  aiResult, cefr?.lowercased(), frequency, category, id])
+            // Record the captured surface as a dedup alias of the renamed entry.
+            try Self.insertAlias(db, entryId: id, key: TextKey.normalize(capturedForm), language: language)
             return .renamedInPlace
         }
     }

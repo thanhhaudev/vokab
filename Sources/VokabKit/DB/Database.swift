@@ -217,6 +217,35 @@ public enum VokabDatabase {
             }
         }
 
+        // Captured-surface aliases for dedup: every surface a lemma was reached by
+        // (running/ran/runs → run) maps to its entry, so re-capturing any of them
+        // dedupes without a fresh agy call. A single `captured_form` column can hold
+        // only one surface and isn't set on merge-into-existing; this table records
+        // them all (set on rename AND merge). `captured_form` stays for display/search.
+        migrator.registerMigration("v10_entry_aliases") { db in
+            try db.create(table: "entry_aliases") { t in
+                t.column("entry_id", .integer).notNull()
+                    .references("entries", onDelete: .cascade)
+                t.column("normalized_surface", .text).notNull()
+                t.column("language", .text).notNull()
+            }
+            // A surface maps to at most one entry per language (the dedup guarantee).
+            try db.execute(sql: """
+                CREATE UNIQUE INDEX idx_entry_aliases ON entry_aliases (normalized_surface, lower(language))
+                """)
+            // Backfill from existing `captured_form` values (set by earlier renames).
+            let rows = try Row.fetchAll(db, sql: "SELECT id, captured_form, language FROM entries WHERE captured_form IS NOT NULL")
+            for row in rows {
+                let id: Int64 = row["id"]
+                let surface: String = row["captured_form"]
+                let lang: String = row["language"]
+                let key = TextKey.normalize(surface)
+                guard !key.isEmpty else { continue }
+                try db.execute(sql: "INSERT OR IGNORE INTO entry_aliases (entry_id, normalized_surface, language) VALUES (?, ?, ?)",
+                               arguments: [id, key, lang])
+            }
+        }
+
         return migrator
     }
 }

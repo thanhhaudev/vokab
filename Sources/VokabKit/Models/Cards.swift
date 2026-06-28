@@ -82,18 +82,27 @@ public struct Confusable: Codable, Sendable, Equatable {
 public struct WordForm: Codable, Sendable, Equatable, Hashable {
     public var label: String
     public var form: String
+    public var gloss: String?
+    public var ipa: String?
+    public var usageNote: String?
+    public var commonError: String?
+    public var examples: [String]
 
-    public init(label: String, form: String) {
-        self.label = label
-        self.form = form
+    public init(label: String, form: String, gloss: String? = nil, ipa: String? = nil,
+                usageNote: String? = nil, commonError: String? = nil, examples: [String] = []) {
+        self.label = label; self.form = form; self.gloss = gloss; self.ipa = ipa
+        self.usageNote = usageNote; self.commonError = commonError; self.examples = examples
     }
 
-    // Lenient: a missing label/form decodes to "" (the UI filters empty forms);
-    // `.convertFromSnakeCase` leaves single-token keys unchanged.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: GenericKey.self)
         label = decodeString(c, "label") ?? ""
         form = decodeString(c, "form") ?? ""
+        gloss = decodeString(c, "gloss")
+        ipa = decodeString(c, "ipa")
+        usageNote = decodeString(c, "usageNote")
+        commonError = decodeString(c, "commonError")
+        examples = decodeArray(c, "examples")
     }
 }
 

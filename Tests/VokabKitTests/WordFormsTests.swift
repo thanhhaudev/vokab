@@ -32,4 +32,25 @@ final class WordFormsTests: XCTestCase {
         XCTAssertEqual(merged.forms.first?.form, "runs")
         XCTAssertEqual(merged.irregular, false)
     }
+
+    func test_decodes_perForm_fields() throws {
+        let card = try JSONCleaning.decode(WordCard.self, from: #"""
+        {"forms":[{"form":"ran","label":"past","gloss":"quá khứ của run","ipa":"/ræn/",
+          "usage_note":"kể chuyện quá khứ","common_error":"không phải runned",
+          "examples":["He ran home.","They ran fast."]}]}
+        """#)
+        let f = try XCTUnwrap(card.forms.first)
+        XCTAssertEqual(f.gloss, "quá khứ của run")
+        XCTAssertEqual(f.ipa, "/ræn/")
+        XCTAssertEqual(f.usageNote, "kể chuyện quá khứ")
+        XCTAssertEqual(f.commonError, "không phải runned")
+        XCTAssertEqual(f.examples, ["He ran home.", "They ran fast."])
+    }
+
+    func test_perForm_fields_absent_areNilOrEmpty() throws {
+        let card = try JSONCleaning.decode(WordCard.self, from: #"{"forms":[{"form":"runs","label":"3rd-person"}]}"#)
+        let f = try XCTUnwrap(card.forms.first)
+        XCTAssertNil(f.gloss); XCTAssertNil(f.ipa); XCTAssertNil(f.usageNote); XCTAssertNil(f.commonError)
+        XCTAssertEqual(f.examples, [])
+    }
 }

@@ -53,6 +53,23 @@ public struct EntryRepository: Sendable {
         }
     }
 
+    /// Dedup lookup by a previously-captured SURFACE form (`captured_form`). After a
+    /// word is lemmatized (`running` → `run`), the surface lives on the lemma row's
+    /// `captured_form`; re-capturing that exact inflection would otherwise miss the
+    /// `normalized_text` dedup and re-spend an agy call/quota. `captured_form` stores
+    /// the cleaned (case-preserved) surface, so `lower(captured_form)` equals
+    /// `TextKey.normalize(surface)` for word captures — an exact canonical match.
+    public func findByCapturedForm(_ surface: String, language: String) throws -> Entry? {
+        let key = TextKey.normalize(surface)
+        guard !key.isEmpty else { return nil }
+        return try dbQueue.read { db in
+            try Entry
+                .filter(sql: "lower(captured_form) = ? AND lower(language) = ?",
+                        arguments: [key, language.lowercased()])
+                .fetchOne(db)
+        }
+    }
+
     /// Batch dedup lookup: of the given `texts`, returns the set of normalized keys
     /// (`TextKey.normalize`) already stored for `language`. One query instead of N
     /// `find` calls — used by the batch-capture preview to mark already-saved lines.
@@ -166,10 +183,12 @@ public struct EntryRepository: Sendable {
     ) throws -> HeadwordResolution {
         let normalizedHeadword = TextKey.normalize(headword)
         return try dbQueue.write { db in
-            if let existingId = try Int64.fetchOne(db, sql: """
-                SELECT id FROM entries
+            if let existing = try Row.fetchOne(db, sql: """
+                SELECT id, analysis_state FROM entries
                 WHERE normalized_text = ? AND lower(language) = lower(?) AND id <> ?
                 """, arguments: [normalizedHeadword, language, id]) {
+                let existingId: Int64 = existing["id"]
+                let existingReady = (existing["analysis_state"] as String?) == "ready"
                 // Fold into the existing lemma card; drop this pending row (cascade
                 // removes its review_state). Backfill only NULL context columns.
                 if let s = captureSentence {
@@ -183,6 +202,18 @@ public struct EntryRepository: Sendable {
                 if let u = sourceURL {
                     try db.execute(sql: "UPDATE entries SET source_url = ? WHERE id = ? AND source_url IS NULL",
                                    arguments: [u, existingId])
+                }
+                // If the existing lemma row is NOT yet ready (still analyzing, or
+                // failed with empty content), promote IT with this fresh analysis —
+                // preserving its id + review progress — so a successful capture is
+                // never discarded into an empty/failed card. A ready row already has
+                // good content, so never clobber it. CAS on `<> 'ready'` so a row that
+                // became ready mid-write isn't overwritten.
+                if !existingReady {
+                    try db.execute(sql: """
+                        UPDATE entries SET ai_result = ?, cefr = ?, frequency = ?, category = ?, analysis_state = 'ready'
+                        WHERE id = ? AND analysis_state <> 'ready'
+                        """, arguments: [aiResult, cefr?.lowercased(), frequency, category, existingId])
                 }
                 try db.execute(sql: "DELETE FROM entries WHERE id = ?", arguments: [id])
                 return .mergedInto(existingId: existingId)

@@ -359,6 +359,21 @@ final class CaptureServiceTests: XCTestCase {
         if case .duplicate = try h.capture.beginCapture(text: "stubborn", language: "en", source: src) {} else { XCTFail() }
     }
 
+    /// Re-capturing the exact inflected surface of an already-lemmatized word must
+    /// dedupe (no new pending row, no agy call, no quota) — the surface lives on the
+    /// lemma row's `captured_form`.
+    func test_beginCapture_dedupesRepeatInflection_bySurface() throws {
+        let h = try makeHarnessForAsync(wordJSON: "{}")
+        let src = SourceContext(appName: "t", url: nil, capturedAt: Date())
+        // An earlier "running" capture that was lemmatized to "run".
+        _ = try h.entries.insertCapture(
+            Entry(rawText: "run", type: "word", language: "en", capturedAt: Date(),
+                  aiResult: "{}", capturedForm: "running"),
+            dueDate: Date())
+        let began = try h.capture.beginCapture(text: "running", language: "en", source: src)
+        guard case .duplicate = began else { return XCTFail("expected duplicate, got \(began)") }
+    }
+
     // MARK: - Chunked paragraph extraction (Task 7)
 
     /// 130 words across 13 sentences → 2 chunks at the 120-word threshold.

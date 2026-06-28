@@ -103,7 +103,11 @@ public struct CaptureService: Sendable {
         guard !cleaned.isEmpty else { return .empty }
         guard type == .word || type == .phrase else { return .paragraph }
 
-        if let existing = try entries.find(rawText: cleaned, language: language) {
+        // Dedup on the lemma key first, then on a previously-captured surface form
+        // (so re-capturing an inflection like "running" that already collapsed into
+        // "run" doesn't re-spend an agy call/quota).
+        if let existing = try entries.find(rawText: cleaned, language: language)
+            ?? entries.findByCapturedForm(cleaned, language: language) {
             return .duplicate(entryId: existing.id ?? -1, type: existing.cardType ?? type)
         }
         if let cached = try cache.lookup(text: cleaned, language: language, meaningLanguage: settings.meaningLanguage) {

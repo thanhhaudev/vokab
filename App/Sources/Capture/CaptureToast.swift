@@ -72,7 +72,7 @@ struct CaptureToastView: View {
         case .analyzing(let text):
             HStack(spacing: 7) {
                 Text("vokab").font(.system(size: 13, weight: .medium))
-                PulsingDots()
+                ActivityDots()
             }
             Text("\(L.t("Analyzing", "Đang phân tích")) \u{201C}\(text)\u{201D}")
                 .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
@@ -187,37 +187,6 @@ struct CaptureToastView: View {
         if seconds < 1 { return "now" }
         if seconds < 60 { return "\(seconds)s" }
         return "\(seconds / 60)m"
-    }
-}
-
-/// Three dots that gently fade in a staggered wave (opacity only — no movement)
-/// for the analyzing state. The classic "typing…" indicator. Honors Reduce Motion.
-struct PulsingDots: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var animating = false
-
-    private let count = 3
-    private let dot: CGFloat = 5
-    private let period = 0.5
-    private let stagger = 0.16
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<count, id: \.self) { i in
-                Circle()
-                    .fill(Theme.dyn(light: 0x7F77DD, dark: 0x9D95E8))
-                    .frame(width: dot, height: dot)
-                    .opacity(animating ? 1.0 : 0.25)
-                    .animation(
-                        reduceMotion ? nil :
-                            .easeInOut(duration: period)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(i) * stagger),
-                        value: animating)
-            }
-        }
-        .frame(height: dot)
-        .onAppear { animating = true }
     }
 }
 

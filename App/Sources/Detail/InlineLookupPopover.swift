@@ -15,8 +15,8 @@ struct InlineLookupPopover: View {
     let hint: CardType
     let language: String
 
-    private enum State: Equatable { case loading, notSaved, saved(Entry) }
-    @SwiftUI.State private var state: State = .loading
+    private enum State: Equatable { case notSaved, saved(Entry) }
+    @SwiftUI.State private var state: State = .notSaved
     @SwiftUI.State private var dueStatus: Theme.DueStatus = .new
     /// True from tapping Capture until the inserted entry first resolves, so a
     /// transient `find` miss doesn't flip the card back to `.notSaved`.
@@ -27,7 +27,6 @@ struct InlineLookupPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             switch state {
-            case .loading:      loading
             case .notSaved:     notSaved
             case .saved(let e): saved(e)
             }
@@ -38,10 +37,6 @@ struct InlineLookupPopover: View {
     }
 
     // MARK: States
-
-    private var loading: some View {
-        ProgressView().controlSize(.small).padding(20)
-    }
 
     /// Compact, content-sized single action row — clicking the word already says
     /// which word it is, so no header is shown.
@@ -83,7 +78,7 @@ struct InlineLookupPopover: View {
                                     accent: Accent(settingsValue: env.settings.pronunciationAccent),
                                     size: .small)
                     Spacer(minLength: 0)
-                    if analyzing { ProgressView().controlSize(.small) }
+                    if analyzing { ActivityDots(diameter: 4) }
                 }
                 // Level + category, under the word.
                 if s.cefr != nil || entry.category != nil {

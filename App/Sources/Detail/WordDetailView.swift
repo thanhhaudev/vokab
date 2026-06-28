@@ -40,12 +40,6 @@ struct WordDetailView: View {
             || (c?.etymology?.isEmpty == false)
     }
 
-    /// Normalized captured surface, for highlighting its chip in the Forms row.
-    private var capturedKey: String? {
-        guard let f = current.capturedForm, !f.isEmpty else { return nil }
-        return TextKey.normalize(f)
-    }
-
     /// Phrases to underline as a unit inside example sentences: the word's own
     /// collocations plus any multi-word word-family entries (phrasal verbs, etc.).
     private var knownPhrases: [String] {
@@ -217,29 +211,9 @@ struct WordDetailView: View {
         }
     }
 
-    /// One form chip: the inflected word + a dim grammatical-role suffix, tappable
-    /// to look up/capture. The chip matching the captured surface is accent-highlighted.
+    /// One form chip: neutral capsule that opens a FormInfoPopover on tap.
     @ViewBuilder private func formChip(_ f: WordForm) -> some View {
-        let captured = capturedKey != nil && TextKey.normalize(f.form) == capturedKey
-        InteractiveToken(text: f.form, hint: .word, language: entry.language,
-                         underlineOnHover: false) {
-            HStack(spacing: 5) {
-                Text(f.form).font(.system(size: 12, weight: captured ? .semibold : .regular))
-                if !f.label.isEmpty {
-                    Text("· \(f.label)").font(.system(size: 11))
-                        .foregroundStyle(captured ? Theme.accent.opacity(0.85) : Theme.textTertiary)
-                }
-                if captured {
-                    Image(systemName: "checkmark").font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(Theme.accent)
-                }
-            }
-            .padding(.horizontal, 10).padding(.vertical, 4)
-            .background(captured ? Theme.accent.opacity(0.15) : Theme.bgPrimary, in: Capsule())
-            .overlay(Capsule().strokeBorder(captured ? Theme.accent : Theme.borderSecondary,
-                                            lineWidth: Theme.hairline(displayScale)))
-            .foregroundStyle(captured ? Theme.accent : Theme.textSecondary)
-        }
+        FormChip(form: f, headword: entry.rawText, language: entry.language, lemmaEntryId: entry.id)
     }
 
     /// A soft amber tag beside the FORMS label marking an irregular word (ran/run,

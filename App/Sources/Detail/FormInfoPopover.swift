@@ -10,17 +10,29 @@ struct FormInfoPopover: View {
     let headword: String
     let language: String
     let lemmaEntryId: Int64?
+    /// True while the card is (en)riching/backfilling — so a bare form shows a
+    /// loading hint instead of just "form of X".
+    var loading: Bool = false
+
+    /// Whether the form carries the meaningful per-form content (not just IPA).
+    private var hasDetail: Bool {
+        (form.gloss?.isEmpty == false) || (form.usageNote?.isEmpty == false)
+            || (form.commonError?.isEmpty == false) || !form.examples.isEmpty
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // Word + role + pronounce on one row; IPA on its own line below so a
+            // slashed IPA (e.g. /ˈmɪs.ɪz/) never wraps awkwardly into the row.
             HStack(spacing: 8) {
                 Text(form.form).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
                 if !form.label.isEmpty { Pill(form.label, style: .type) }
-                if let ipa = form.ipa, !ipa.isEmpty {
-                    Text(ipa).font(Theme.mono(12)).foregroundStyle(Theme.textSecondary)
-                }
+                Spacer(minLength: 8)
                 PronounceButton(text: form.form,
                                 accent: Accent(settingsValue: env.settings.pronunciationAccent), size: .small)
+            }
+            if let ipa = form.ipa, !ipa.isEmpty {
+                Text(ipa).font(Theme.mono(12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
             }
             Button {
                 if let id = lemmaEntryId { WindowManager.shared.showLibrary(select: id) }
@@ -29,6 +41,13 @@ struct FormInfoPopover: View {
                     .font(.system(size: 12)).foregroundStyle(Theme.accent)
             }
             .buttonStyle(.plain)
+            if !hasDetail && loading {
+                HStack(spacing: 7) {
+                    ActivityDots(diameter: 4)
+                    Text(L.t("Loading…", "Đang tải nghĩa…"))
+                        .font(.system(size: 12)).foregroundStyle(Theme.textTertiary)
+                }
+            }
             if let gloss = form.gloss, !gloss.isEmpty {
                 Text(gloss).font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -70,6 +89,7 @@ struct FormChip: View {
     let headword: String
     let language: String
     let lemmaEntryId: Int64?
+    var loading: Bool = false
     @State private var showing = false
     @State private var hovering = false
 
@@ -89,7 +109,8 @@ struct FormChip: View {
         .onHover { h in hovering = h; if h { NSCursor.pointingHand.push() } else { NSCursor.pop() } }
         .onTapGesture { showing = true }
         .popover(isPresented: $showing, arrowEdge: .bottom) {
-            FormInfoPopover(form: form, headword: headword, language: language, lemmaEntryId: lemmaEntryId)
+            FormInfoPopover(form: form, headword: headword, language: language,
+                            lemmaEntryId: lemmaEntryId, loading: loading)
                 .environmentObject(env)
         }
     }

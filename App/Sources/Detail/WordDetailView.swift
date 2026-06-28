@@ -214,7 +214,8 @@ struct WordDetailView: View {
 
     /// One form chip: neutral capsule that opens a FormInfoPopover on tap.
     @ViewBuilder private func formChip(_ f: WordForm) -> some View {
-        FormChip(form: f, headword: entry.rawText, language: entry.language, lemmaEntryId: entry.id)
+        FormChip(form: f, headword: entry.rawText, language: entry.language, lemmaEntryId: entry.id,
+                 loading: loadingRelations)
     }
 
     /// A soft amber tag beside the FORMS label marking an irregular word (ran/run,

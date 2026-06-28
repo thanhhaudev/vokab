@@ -69,9 +69,13 @@ public enum PromptTemplates {
     /// agy reuses existing categories before inventing one (Phase 2).
     public static func wordCore(_ word: String, language: String, meaningLanguage: String, taxonomy: [String]) -> String {
         """
-        Define '\(word)' (language: \(language)). Return ONLY JSON:
-        {ipa, senses:[{pos, meaning, meaning_en, examples[], matches_context}], cefr_level, register, category}
-        List ALL common senses, one object per sense; give exactly one short example per sense.
+        Define the captured text '\(word)' (language: \(language)). Return ONLY JSON:
+        {headword, ipa, senses:[{pos, meaning, meaning_en, examples[], matches_context}], cefr_level, register, category}
+        "headword" = the dictionary HEADWORD (lemma) of '\(word)' — e.g. 'running'->'run', 'ran'->'run', 'cats'->'cat'.
+        BUT if '\(word)' is itself a distinct dictionary entry with its own part of speech or meaning
+        (e.g. 'interesting' adjective, 'glasses' meaning spectacles, 'developed' as in 'developed country'),
+        set "headword" to '\(word)' unchanged. Then DEFINE that headword: every other field describes the headword.
+        List ALL common senses of the headword, one object per sense; give exactly one short example per sense.
         "meaning" = that sense's definition in \(meaningLanguage); "meaning_en" = in English.
         "matches_context": false on every sense (no context sentence is supplied here).
         For "category": prefer reusing one of [\(taxonomy.joined(separator: ", "))]; only invent a new one if none fits.

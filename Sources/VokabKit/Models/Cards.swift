@@ -107,6 +107,10 @@ public struct WordCard: Codable, Sendable, Equatable {
     }
 
     public var ipa: String?
+    /// Dictionary headword (lemma) this card defines, as resolved by agy from the
+    /// captured surface form (e.g. "running" → "run"). nil = agy returned none;
+    /// callers fall back to the captured text.
+    public var headword: String?
     public var pos: String?
     public var senses: [Sense]
     /// Primary gloss, in the meaning language active at capture (see `meaningLang`).
@@ -165,6 +169,7 @@ public struct WordCard: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: GenericKey.self)
         ipa = decodeString(c, "ipa")
+        headword = decodeString(c, "headword")
         pos = decodeString(c, "pos")
         senses = (try? c.decodeIfPresent([Sense].self,
             forKey: GenericKey(stringValue: "senses")!)) ?? nil ?? []
@@ -203,7 +208,7 @@ public struct WordCard: Codable, Sendable, Equatable {
     public func merging(_ other: WordCard) -> WordCard {
         func pick(_ a: String?, _ b: String?) -> String? { (a?.isEmpty == false) ? a : b }
         var c = self
-        c.ipa = pick(ipa, other.ipa); c.pos = pick(pos, other.pos)
+        c.ipa = pick(ipa, other.ipa); c.headword = pick(headword, other.headword); c.pos = pick(pos, other.pos)
         c.meaning = pick(meaning, other.meaning); c.meaningLang = pick(meaningLang, other.meaningLang)
         c.meaningEn = pick(meaningEn, other.meaningEn)
         c.etymology = pick(etymology, other.etymology); c.cefrLevel = pick(cefrLevel, other.cefrLevel)

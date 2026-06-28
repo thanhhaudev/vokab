@@ -184,21 +184,14 @@ struct WordDetailView: View {
     // MARK: Forms (inflections)
 
     @ViewBuilder private var formsSection: some View {
-        if let forms = card?.forms, !forms.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    SecLabel(L.t("Forms", "Dạng chia"))
-                    if card?.irregular == true { irregularTag }
-                }
-                FlowLayout(spacing: 6) {
-                    ForEach(forms, id: \.self) { f in
-                        formChip(f)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16).padding(.vertical, 14)
+        let forms = card?.forms ?? []
+        let detailed = !forms.isEmpty && WordCard.formsHaveDetail(forms)
+        if detailed {
+            formsChips(forms)
         } else if loadingRelations {
+            // Empty forms (new word) OR bare forms about to be replaced by backfill
+            // (old card) → skeleton, so the chip list never visibly jumps from the
+            // stale set to agy's re-enumerated set.
             VStack(alignment: .leading, spacing: 8) {
                 SecLabel(L.t("Forms", "Dạng chia"))
                 FlowLayout(spacing: 6) {
@@ -209,7 +202,27 @@ struct WordDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 14)
             .transition(.opacity)
+        } else if !forms.isEmpty {
+            // Not loading and still bare (backfill done/failed, or agy returned no
+            // per-form detail) → show what we have rather than a stuck skeleton.
+            formsChips(forms)
         }
+    }
+
+    @ViewBuilder private func formsChips(_ forms: [WordForm]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                SecLabel(L.t("Forms", "Dạng chia"))
+                if card?.irregular == true { irregularTag }
+            }
+            FlowLayout(spacing: 6) {
+                ForEach(forms, id: \.self) { f in
+                    formChip(f)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16).padding(.vertical, 14)
     }
 
     /// One form chip: neutral capsule that opens a FormInfoPopover on tap.

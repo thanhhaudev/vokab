@@ -145,6 +145,60 @@ public struct EntryRepository: Sendable {
         }
     }
 
+    /// Outcome of resolving a freshly-analyzed pending word entry to its lemma.
+    public enum HeadwordResolution: Sendable, Equatable {
+        case renamedInPlace
+        case mergedInto(existingId: Int64)
+    }
+
+    /// After core analysis yields a `headword` that differs from the pending
+    /// entry's surface text, resolve the entry to that lemma. If no other entry
+    /// owns the headword, rename this one in place (storing the surface in
+    /// `captured_form`) and mark it analyzed. If one already exists, delete this
+    /// pending entry and backfill the existing card's capture context — so repeat
+    /// inflections collapse onto one card (SPEC §11). One write, so the unique
+    /// dedup indexes never see a transient `raw_text` collision.
+    @discardableResult
+    public func resolveHeadwordAndMarkAnalyzed(
+        id: Int64, headword: String, capturedForm: String, language: String,
+        aiResult: String, cefr: String?, frequency: String?, category: String?,
+        captureSentence: String?, sourceApp: String?, sourceURL: String?
+    ) throws -> HeadwordResolution {
+        let normalizedHeadword = TextKey.normalize(headword)
+        return try dbQueue.write { db in
+            if let existingId = try Int64.fetchOne(db, sql: """
+                SELECT id FROM entries
+                WHERE normalized_text = ? AND lower(language) = lower(?) AND id <> ?
+                """, arguments: [normalizedHeadword, language, id]) {
+                // Fold into the existing lemma card; drop this pending row (cascade
+                // removes its review_state). Backfill only NULL context columns.
+                if let s = captureSentence {
+                    try db.execute(sql: "UPDATE entries SET capture_sentence = ? WHERE id = ? AND capture_sentence IS NULL",
+                                   arguments: [s, existingId])
+                }
+                if let a = sourceApp {
+                    try db.execute(sql: "UPDATE entries SET source_app = ? WHERE id = ? AND source_app IS NULL",
+                                   arguments: [a, existingId])
+                }
+                if let u = sourceURL {
+                    try db.execute(sql: "UPDATE entries SET source_url = ? WHERE id = ? AND source_url IS NULL",
+                                   arguments: [u, existingId])
+                }
+                try db.execute(sql: "DELETE FROM entries WHERE id = ?", arguments: [id])
+                return .mergedInto(existingId: existingId)
+            }
+            // No conflict: rename this entry to the headword and mark it analyzed.
+            try db.execute(sql: """
+                UPDATE entries
+                SET raw_text = ?, normalized_text = ?, captured_form = ?,
+                    ai_result = ?, cefr = ?, frequency = ?, category = ?, analysis_state = 'ready'
+                WHERE id = ? AND analysis_state = 'analyzing'
+                """, arguments: [headword, normalizedHeadword, capturedForm,
+                                 aiResult, cefr?.lowercased(), frequency, category, id])
+            return .renamedInPlace
+        }
+    }
+
     public func markAnalysisFailed(id: Int64) throws {
         try dbQueue.write { db in
             try db.execute(sql: "UPDATE entries SET analysis_state = 'failed' WHERE id = ?", arguments: [id])

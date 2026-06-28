@@ -246,6 +246,16 @@ public enum VokabDatabase {
             }
         }
 
+        // Durable lemmatization choice. "Keep original" / "Save separately" capture
+        // with lemmatize=false; without persisting it, a retry/resume re-analyzed the
+        // pending entry with the default (true) and silently lemmatized it. The entry
+        // now carries the choice so `runAnalysis` reads it regardless of worker memory.
+        migrator.registerMigration("v11_lemmatize") { db in
+            try db.alter(table: "entries") { t in
+                t.add(column: "lemmatize", .boolean).notNull().defaults(to: true)
+            }
+        }
+
         return migrator
     }
 }

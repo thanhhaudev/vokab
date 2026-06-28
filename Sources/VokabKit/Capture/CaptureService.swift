@@ -127,7 +127,8 @@ public struct CaptureService: Sendable {
         let entry = Entry(rawText: cleaned, type: type.rawValue, language: language,
                           sourceApp: source.appName, sourceURL: source.url,
                           capturedAt: now, aiResult: "{}",
-                          analysisState: AnalysisState.analyzing.rawValue)
+                          analysisState: AnalysisState.analyzing.rawValue,
+                          lemmatize: lemmatize)   // durable: survives retry/resume
         let id = try entries.insertCapture(entry, dueDate: now, startingEase: settings.startingEase)
         return .pending(entryId: id, type: type)
     }
@@ -159,11 +160,12 @@ public struct CaptureService: Sendable {
 
     /// Background tier-1 analysis. Returns a report so callers can react (notify
     /// on failure, show the lemma rename). Never throws — transport errors mark the
-    /// entry failed. When `lemmatize` is true (default) and agy resolves a headword
-    /// that differs from the captured surface, the entry is renamed to the lemma
-    /// or merged into an existing lemma card.
+    /// entry failed. When the entry's persisted `lemmatize` is true and agy resolves a
+    /// headword that differs from the captured surface, the entry is renamed to the
+    /// lemma or merged into an existing lemma card. Reading the choice FROM the entry
+    /// (not a param) makes "Keep original"/"Save separately" durable across retry/resume.
     @discardableResult
-    public func runAnalysis(entryId: Int64, lemmatize: Bool = true) async -> AnalysisReport {
+    public func runAnalysis(entryId: Int64) async -> AnalysisReport {
         func report(_ o: AnalysisOutcome) -> AnalysisReport { AnalysisReport(outcome: o, resolvedId: entryId, lemma: nil) }
         guard let entry = try? entries.entry(id: entryId),
               entry.analysisState == AnalysisState.analyzing.rawValue,
@@ -177,7 +179,7 @@ public struct CaptureService: Sendable {
                 let card = try await agy.defineWordCore(text, language: language, taxonomy: taxonomy)
                 let json = try encode(card)
                 let resolvedHeadword = cleanedHeadword(card.headword) ?? text
-                let renames = lemmatize && TextKey.normalize(resolvedHeadword) != TextKey.normalize(text)
+                let renames = entry.lemmatize && TextKey.normalize(resolvedHeadword) != TextKey.normalize(text)
                 let cacheText = renames ? resolvedHeadword : text
                 try quota.increment(on: entry.capturedAt)
                 try cache.upsert(text: cacheText, language: language, meaningLanguage: settings.meaningLanguage, aiResult: json, now: entry.capturedAt)

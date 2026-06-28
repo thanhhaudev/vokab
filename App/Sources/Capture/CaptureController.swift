@@ -181,7 +181,7 @@ final class CaptureController: ObservableObject {
                                 break
                             }
                         }
-                        await env.captureWorker.enqueueAnalysis(entryId: entryId, lemmatize: lemmatize)
+                        await env.captureWorker.enqueueAnalysis(entryId: entryId)
 
                     case .blocked(let behavior):
                         model.phase = .error("Daily quota reached (\(behavior.rawValue)).")

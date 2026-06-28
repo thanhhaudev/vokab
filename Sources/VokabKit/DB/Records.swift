@@ -23,6 +23,7 @@ public struct Entry: Codable, FetchableRecord, MutablePersistableRecord, Sendabl
     public var category: String?     // canonical category; nil = unclassified
     public var captureSentence: String?   // original sentence the term appeared in; nil = none
     public var capturedForm: String?      // surface the user captured when it differs from the headword/raw_text; nil = same
+    public var lemmatize: Bool            // false = "Keep original"/"Save separately" — never rename to the lemma (durable across retry/resume)
 
     public static let databaseTableName = "entries"
 
@@ -43,6 +44,7 @@ public struct Entry: Codable, FetchableRecord, MutablePersistableRecord, Sendabl
         case category
         case captureSentence = "capture_sentence"
         case capturedForm = "captured_form"
+        case lemmatize
     }
 
     public mutating func didInsert(_ inserted: InsertionSuccess) {
@@ -54,7 +56,7 @@ public struct Entry: Codable, FetchableRecord, MutablePersistableRecord, Sendabl
                 capturedAt: Date, aiResult: String, cefr: String? = nil, frequency: String? = nil,
                 enriched: Bool = false, analysisState: String = AnalysisState.ready.rawValue,
                 category: String? = nil, captureSentence: String? = nil,
-                capturedForm: String? = nil) {
+                capturedForm: String? = nil, lemmatize: Bool = true) {
         self.id = id
         self.rawText = rawText
         self.normalizedText = normalizedText
@@ -71,6 +73,7 @@ public struct Entry: Codable, FetchableRecord, MutablePersistableRecord, Sendabl
         self.category = category
         self.captureSentence = captureSentence
         self.capturedForm = capturedForm
+        self.lemmatize = lemmatize
     }
 
     public var cardType: CardType? { CardType(rawValue: type) }

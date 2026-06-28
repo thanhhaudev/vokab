@@ -24,13 +24,12 @@ public actor CaptureWorker {
         self.onActivity = onActivity
     }
 
-    private var lemmatizeFlags: [Int64: Bool] = [:]
-
     /// Lên lịch phân tích một entry pending. Coalesce: bỏ qua nếu đang chạy.
-    public func enqueueAnalysis(entryId: Int64, lemmatize: Bool = true) {
+    /// The lemmatize choice is read from the entry inside `runAnalysis` (durable
+    /// across retry/resume), so it is no longer threaded through the worker.
+    public func enqueueAnalysis(entryId: Int64) {
         guard !inflight.contains(entryId) else { return }
         inflight.insert(entryId)
-        lemmatizeFlags[entryId] = lemmatize
         onActivity?(inflight.count)
         tasks[entryId] = Task { await self.run(entryId) }
     }
@@ -42,12 +41,10 @@ public actor CaptureWorker {
     }
 
     private func run(_ id: Int64) async {
-        let lemmatize = lemmatizeFlags[id] ?? true
         let report = (try? await gate.withPermit {
-            await capture.runAnalysis(entryId: id, lemmatize: lemmatize)
+            await capture.runAnalysis(entryId: id)
         }) ?? CaptureService.AnalysisReport(outcome: .skipped, resolvedId: id, lemma: nil)
         inflight.remove(id)
-        lemmatizeFlags[id] = nil
         onActivity?(inflight.count)
         tasks[id] = nil
         onChange()

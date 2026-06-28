@@ -570,14 +570,18 @@ final class CaptureServiceTests: XCTestCase {
         XCTAssertEqual(try h.entries.entry(id: id)?.rawText, "run")
     }
 
-    func test_runAnalysis_lemmatizeFalse_keepsSurface() async throws {
+    /// The lemmatize choice is persisted on the entry (beginCapture lemmatize:false),
+    /// and runAnalysis reads it FROM the entry — so it is honored even on a bare
+    /// re-analysis (resume/retry), which never passes a flag. Surface is NOT renamed.
+    func test_runAnalysis_lemmatizeFalse_keepsSurface_durably() async throws {
         let h = try makeHarnessForAsync(wordJSON: #"{"headword":"run","senses":[{"pos":"verb"}]}"#)
         let src = SourceContext(appName: "t", url: nil, capturedAt: Date())
-        guard case let .pending(id, _) = try h.capture.beginCapture(text: "running", language: "en", source: src)
+        guard case let .pending(id, _) = try h.capture.beginCapture(text: "running", language: "en", source: src, lemmatize: false)
         else { return XCTFail() }
-        let report = await h.capture.runAnalysis(entryId: id, lemmatize: false)
+        XCTAssertEqual(try h.entries.entry(id: id)?.lemmatize, false)     // persisted choice
+        let report = await h.capture.runAnalysis(entryId: id)            // bare re-analysis (resume/retry)
         XCTAssertNil(report.lemma)
-        XCTAssertEqual(try h.entries.entry(id: id)?.rawText, "running")   // not renamed
+        XCTAssertEqual(try h.entries.entry(id: id)?.rawText, "running")   // not renamed despite no flag passed
     }
 
     // MARK: - Fix 1: unified empty guard in capture(...)

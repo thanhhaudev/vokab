@@ -139,7 +139,7 @@ struct LibraryView: View {
                     Spacer()
                     if entry.cardType == .word || entry.cardType == .phrase {
                         if reloadingSenses {
-                            ProgressView().controlSize(.small)
+                            ActivityDots(diameter: 4)
                         } else {
                             let help = entry.cardType == .word
                                 ? L.t("Update senses", "Cập nhật nghĩa")
@@ -410,7 +410,7 @@ struct LibraryView: View {
                             .transition(.opacity)
                     }
                     if model.quotaReloading {
-                        ProgressView().controlSize(.mini)
+                        ActivityDots(diameter: 3)
                     } else {
                         Image(systemName: "arrow.clockwise").font(.system(size: 9))
                             .foregroundStyle(Theme.textTertiary)

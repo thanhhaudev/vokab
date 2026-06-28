@@ -144,7 +144,7 @@ struct ParagraphExtractionView: View {
                 translationBlock(tv)
             } else if translating {
                 HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
+                    ActivityDots(diameter: 4)
                     SecLabel(L.t("Translating…", "Đang dịch…"))
                 }
             }
@@ -254,7 +254,7 @@ struct ParagraphExtractionView: View {
     private var loadingOverlay: some View {
         ZStack {
             Color.black.opacity(0.04)
-            ProgressView().controlSize(.large)
+            ActivityDots(diameter: 8)
         }
     }
 

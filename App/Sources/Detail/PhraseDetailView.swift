@@ -298,7 +298,7 @@ struct PhraseDetailView: View {
                 HStack(spacing: 6) {
                     SecLabel("Examples")
                     if addingExamples {
-                        ProgressView().controlSize(.small).scaleEffect(0.7)
+                        ActivityDots(diameter: 4)
                     } else {
                         Button { addExamples() } label: {
                             Image(systemName: "plus.circle").font(.system(size: 12))

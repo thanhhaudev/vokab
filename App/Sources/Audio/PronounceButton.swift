@@ -16,7 +16,6 @@ struct PronounceButton: View {
         case regular, small
         var diameter: CGFloat { self == .regular ? 30 : 22 }
         var icon: CGFloat { self == .regular ? 13 : 11 }
-        var spinnerScale: CGFloat { self == .regular ? 0.75 : 0.6 }
     }
 
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -28,7 +27,7 @@ struct PronounceButton: View {
         } label: {
             Group {
                 if isSpeaking {
-                    ProgressView().controlSize(.small).scaleEffect(size.spinnerScale)
+                    ActivityDots(diameter: size == .regular ? 4 : 3, color: Theme.accent)
                 } else {
                     Image(systemName: "speaker.wave.2")
                         .font(.system(size: size.icon)).foregroundStyle(Theme.accent)

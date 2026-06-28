@@ -73,7 +73,7 @@ struct ProductionCardView: View {
             Button(L.t("Check", "Kiểm tra")) { submit() }
                 .buttonStyle(.vPrimary)
                 .disabled(sentence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || submitting)
-            if submitting { ProgressView().controlSize(.small) }
+            if submitting { ActivityDots(diameter: 4) }
             Spacer()
             Button(L.t("Skip", "Bỏ qua")) { onGrade(.hard) }.buttonStyle(.vSecondary)
         }

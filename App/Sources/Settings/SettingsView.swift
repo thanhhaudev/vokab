@@ -477,7 +477,7 @@ struct SettingsView: View {
         if let c = current, !options.contains(c) { options.insert(c, at: 0) }
         return HStack(spacing: 6) {
             if modelsLoading && options.isEmpty {
-                ProgressView().controlSize(.small)
+                ActivityDots(diameter: 4)
             }
             Menu {
                 Button(L.t("agy default", "agy mặc định")) { selection.wrappedValue = nil; persist() }
@@ -518,7 +518,7 @@ struct SettingsView: View {
 
     @ViewBuilder private var statusBadge: some View {
         switch testResult {
-        case .testing: HStack(spacing: 6) { ProgressView().controlSize(.small); Text(L.t("Testing…", "Đang kiểm tra…")).font(.system(size: 11)).foregroundStyle(Theme.textSecondary) }
+        case .testing: HStack(spacing: 6) { ActivityDots(diameter: 4); Text(L.t("Testing…", "Đang kiểm tra…")).font(.system(size: 11)).foregroundStyle(Theme.textSecondary) }
         case .ok: badge("OK", system: "checkmark.circle", fg: Theme.successFg, bg: Theme.successBg)
         case .fail(let m): badge(m, system: "xmark.circle", fg: Theme.textDanger, bg: Theme.bgDanger)
         case .none:

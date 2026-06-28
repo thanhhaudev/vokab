@@ -162,4 +162,17 @@ final class PromptTemplateTests: XCTestCase {
             XCTAssertTrue(p.lowercased().contains("irregular"), "missing irregular in: \(p)")
         }
     }
+
+    func test_relations_prompts_request_perForm_fields() {
+        let prompts = [
+            PromptTemplates.wordEnrichRelations("run", language: "en"),
+            PromptTemplates.wordRelationsBatch(words: ["run"], language: "en"),
+            PromptTemplates.wordRelationsBackfill("run", language: "en"),
+        ]
+        for p in prompts {
+            let l = p.lowercased()
+            XCTAssertTrue(l.contains("gloss") && l.contains("ipa") && l.contains("usage_note")
+                          && l.contains("common_error"), "missing per-form field in: \(p)")
+        }
+    }
 }

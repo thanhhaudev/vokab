@@ -22,6 +22,7 @@ public struct Entry: Codable, FetchableRecord, MutablePersistableRecord, Sendabl
     public var analysisState: String // AnalysisState.rawValue; "ready" cho entry đã đủ
     public var category: String?     // canonical category; nil = unclassified
     public var captureSentence: String?   // original sentence the term appeared in; nil = none
+    public var capturedForm: String?      // surface the user captured when it differs from the headword/raw_text; nil = same
 
     public static let databaseTableName = "entries"
 
@@ -41,6 +42,7 @@ public struct Entry: Codable, FetchableRecord, MutablePersistableRecord, Sendabl
         case analysisState = "analysis_state"
         case category
         case captureSentence = "capture_sentence"
+        case capturedForm = "captured_form"
     }
 
     public mutating func didInsert(_ inserted: InsertionSuccess) {
@@ -51,7 +53,8 @@ public struct Entry: Codable, FetchableRecord, MutablePersistableRecord, Sendabl
                 sourceApp: String? = nil, sourceURL: String? = nil,
                 capturedAt: Date, aiResult: String, cefr: String? = nil, frequency: String? = nil,
                 enriched: Bool = false, analysisState: String = AnalysisState.ready.rawValue,
-                category: String? = nil, captureSentence: String? = nil) {
+                category: String? = nil, captureSentence: String? = nil,
+                capturedForm: String? = nil) {
         self.id = id
         self.rawText = rawText
         self.normalizedText = normalizedText
@@ -67,6 +70,7 @@ public struct Entry: Codable, FetchableRecord, MutablePersistableRecord, Sendabl
         self.analysisState = analysisState
         self.category = category
         self.captureSentence = captureSentence
+        self.capturedForm = capturedForm
     }
 
     public var cardType: CardType? { CardType(rawValue: type) }

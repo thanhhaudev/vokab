@@ -211,6 +211,12 @@ public enum VokabDatabase {
                 """)
         }
 
+        migrator.registerMigration("v9_captured_form") { db in
+            try db.alter(table: "entries") { t in
+                t.add(column: "captured_form", .text)   // surface the user captured; NULL = equals headword
+            }
+        }
+
         return migrator
     }
 }

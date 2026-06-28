@@ -181,7 +181,11 @@ struct InlineLookupPopover: View {
     // MARK: Lookup
 
     private func resolve() {
-        if let entry = try? env.entries.find(rawText: text, language: language) {
+        // Exact headword first, then a captured-surface alias — so clicking an
+        // inflection like "ran" (an alias of the saved "run") shows run's saved peek
+        // instead of a misleading "Add to library" (which would only dedupe to run).
+        if let entry = (try? env.entries.find(rawText: text, language: language))
+            ?? (try? env.entries.findByAlias(text, language: language)) ?? nil {
             let st = entry.id.flatMap { try? env.review.state(entryId: $0) }
             dueStatus = Theme.DueStatus.of(st, now: Date())
             state = .saved(entry)

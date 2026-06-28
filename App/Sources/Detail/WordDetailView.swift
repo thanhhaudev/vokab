@@ -23,6 +23,14 @@ struct WordDetailView: View {
     private var entry: Entry { current }
     private var card: WordCard? { CardDecoding.word(current) }
 
+    private var hasForms: Bool { !(card?.forms.isEmpty ?? true) }
+
+    /// Normalized captured surface, for highlighting its chip in the Forms row.
+    private var capturedKey: String? {
+        guard let f = current.capturedForm, !f.isEmpty else { return nil }
+        return TextKey.normalize(f)
+    }
+
     /// Phrases to underline as a unit inside example sentences: the word's own
     /// collocations plus any multi-word word-family entries (phrasal verbs, etc.).
     private var knownPhrases: [String] {
@@ -45,6 +53,8 @@ struct WordDetailView: View {
                         Hairline()
                         sensesSection
                         Hairline()
+                        formsSection
+                        if hasForms { Hairline() }
                         referenceArea
                     }
                 }
@@ -73,7 +83,7 @@ struct WordDetailView: View {
             // entries enriched before those fields existed. New captures already have
             // them from relations. Require a decodable card so a corrupt entry is never overwritten.
             if current.cardType == .word, let c = CardDecoding.word(current),
-               (c.collocations.isEmpty && c.confusables.isEmpty) || c.contextOfUse == nil || c.grammarNote == nil,
+               (c.collocations.isEmpty && c.confusables.isEmpty) || c.contextOfUse == nil || c.grammarNote == nil || c.irregular == nil,
                let updated = try? await env.relationsBackfiller.backfill(entry: current) {
                 current = updated
                 WindowManager.notifyDataChanged()
@@ -125,10 +135,6 @@ struct WordDetailView: View {
                         .compactMap { $0 }.joined(separator: " · "))
                     .font(.system(size: 12)).foregroundStyle(Theme.textTertiary).lineLimit(1)
             }
-            if let surface = entry.capturedForm, !surface.isEmpty {
-                Text(L.t("captured as \u{201C}\(surface)\u{201D}", "đã bắt dưới dạng \u{201C}\(surface)\u{201D}"))
-                    .font(.system(size: 12)).foregroundStyle(Theme.textTertiary)
-            }
             FlowLayout(spacing: 6) {
                 MultiPill(card?.combinedPOS, style: .type)
                 if let cefr = card?.cefrLevel, cefr.cefrLevel != nil { Pill.cefr(cefr) }
@@ -159,6 +165,53 @@ struct WordDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16).padding(.vertical, 14)
+    }
+
+    // MARK: Forms (inflections)
+
+    @ViewBuilder private var formsSection: some View {
+        if let forms = card?.forms, !forms.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                SecLabel(L.t("Forms", "Dạng chia"))
+                FlowLayout(spacing: 6) {
+                    ForEach(forms, id: \.form) { f in
+                        formChip(f)
+                    }
+                }
+                if card?.irregular == true {
+                    Label(L.t("irregular", "bất quy tắc"), systemImage: "exclamationmark.triangle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.dyn(light: 0xB26B00, dark: 0xE0A33A))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+        }
+    }
+
+    /// One form chip: the inflected word + a dim grammatical-role suffix, tappable
+    /// to look up/capture. The chip matching the captured surface is accent-highlighted.
+    @ViewBuilder private func formChip(_ f: WordForm) -> some View {
+        let captured = capturedKey != nil && TextKey.normalize(f.form) == capturedKey
+        InteractiveToken(text: f.form, hint: .word, language: entry.language,
+                         underlineOnHover: false) {
+            HStack(spacing: 5) {
+                Text(f.form).font(.system(size: 12, weight: captured ? .semibold : .regular))
+                if !f.label.isEmpty {
+                    Text("· \(f.label)").font(.system(size: 11))
+                        .foregroundStyle(captured ? Theme.accent.opacity(0.85) : Theme.textTertiary)
+                }
+                if captured {
+                    Image(systemName: "checkmark").font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Theme.accent)
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(captured ? Theme.accent.opacity(0.15) : Theme.bgPrimary, in: Capsule())
+            .overlay(Capsule().strokeBorder(captured ? Theme.accent : Theme.borderSecondary,
+                                            lineWidth: Theme.hairline(displayScale)))
+            .foregroundStyle(captured ? Theme.accent : Theme.textSecondary)
+        }
     }
 
     /// One sense: pos pill on its own line, then the meaning, then a dimmer

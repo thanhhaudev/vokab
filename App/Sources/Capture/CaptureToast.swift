@@ -156,6 +156,9 @@ struct CaptureToastView: View {
             if model.lemmaRename != nil, let keep = model.onKeepOriginal {
                 toastAction(L.t("Keep original", "Giữ nguyên gốc"), system: "textformat", primary: false) { keep() }
             }
+            if let save = model.onSaveSeparately {
+                toastAction(L.t("Save separately", "Lưu riêng"), system: "rectangle.badge.plus", primary: false) { save() }
+            }
         }
         .padding(.top, 10)
     }

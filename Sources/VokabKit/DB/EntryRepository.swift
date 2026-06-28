@@ -270,9 +270,16 @@ public struct EntryRepository: Sendable {
         }
     }
 
-    public func markAnalysisFailed(id: Int64) throws {
+    /// Marks an entry failed ONLY if it is still `analyzing`, and returns whether the
+    /// transition applied. CAS-guarded so this entry's own LATE failure can't clobber a
+    /// row that a concurrent inflection-merge already promoted to `ready` (capture
+    /// "run" + "ran" racing; "ran" promotes "run" to ready, then "run"'s call times out).
+    @discardableResult
+    public func markAnalysisFailed(id: Int64) throws -> Bool {
         try dbQueue.write { db in
-            try db.execute(sql: "UPDATE entries SET analysis_state = 'failed' WHERE id = ?", arguments: [id])
+            try db.execute(sql: "UPDATE entries SET analysis_state = 'failed' WHERE id = ? AND analysis_state = 'analyzing'",
+                           arguments: [id])
+            return db.changesCount > 0
         }
     }
 

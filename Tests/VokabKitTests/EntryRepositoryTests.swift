@@ -163,6 +163,37 @@ final class ResolveHeadwordTests: XCTestCase {
 
     /// Codex finding 1: merging an inflection into an existing lemma must record the
     /// merged surface as an alias on the survivor, so re-capturing it dedupes.
+    /// Codex finding: an inflection-merge promotes a still-analyzing lemma to ready;
+    /// the lemma's OWN late failure must NOT clobber it back to failed.
+    func test_markAnalysisFailed_doesNotClobberPromotedReady() throws {
+        let queue = try VokabDatabase.makeInMemory()
+        let repo = EntryRepository(dbQueue: queue)
+        // A: lemma "run" still analyzing (its worker is in flight).
+        let a = try repo.insertCapture(
+            Entry(rawText: "run", type: "word", language: "en", capturedAt: Date(),
+                  aiResult: "{}", analysisState: AnalysisState.analyzing.rawValue), dueDate: Date())
+        // B: inflection "ran" finishes first → promotes A to ready with content, deletes B.
+        let b = try pending(repo, surface: "ran")
+        _ = try repo.resolveHeadwordAndMarkAnalyzed(
+            id: b, headword: "run", capturedForm: "ran", language: "en",
+            aiResult: #"{"headword":"run","senses":[{"pos":"verb"}]}"#, cefr: nil, frequency: nil,
+            category: nil, captureSentence: nil, sourceApp: nil, sourceURL: nil)
+        XCTAssertEqual(try repo.entry(id: a)?.analysisState, AnalysisState.ready.rawValue)  // promoted
+        // A's own worker fails LATE.
+        let didFail = try repo.markAnalysisFailed(id: a)
+        XCTAssertFalse(didFail)                                                            // CAS: no transition
+        XCTAssertEqual(try repo.entry(id: a)?.analysisState, AnalysisState.ready.rawValue) // still ready
+        XCTAssertTrue(try XCTUnwrap(repo.entry(id: a)).aiResult.contains("senses"))        // content intact
+    }
+
+    func test_markAnalysisFailed_appliesWhenStillAnalyzing() throws {
+        let queue = try VokabDatabase.makeInMemory()
+        let repo = EntryRepository(dbQueue: queue)
+        let id = try pending(repo, surface: "stubborn")
+        XCTAssertTrue(try repo.markAnalysisFailed(id: id))
+        XCTAssertEqual(try repo.entry(id: id)?.analysisState, AnalysisState.failed.rawValue)
+    }
+
     func test_merge_recordsAliasOnSurvivor() throws {
         let queue = try VokabDatabase.makeInMemory()
         let repo = EntryRepository(dbQueue: queue)

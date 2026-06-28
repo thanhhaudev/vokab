@@ -213,8 +213,11 @@ public struct CaptureService: Sendable {
                 return report(.ready)
             }
         } catch {
-            try? entries.markAnalysisFailed(id: entryId)
-            return report(.failed)
+            // Only report failed if the entry was still analyzing. A concurrent
+            // inflection-merge may have already promoted this lemma row to ready with
+            // good content — don't mark it failed or fire a failure notification.
+            let didFail = (try? entries.markAnalysisFailed(id: entryId)) ?? false
+            return report(didFail ? .failed : .skipped)
         }
     }
 

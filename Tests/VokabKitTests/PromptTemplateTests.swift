@@ -146,4 +146,10 @@ final class PromptTemplateTests: XCTestCase {
         let p = PromptTemplates.production(word: "run", sentence: "I run.")
         XCTAssertFalse(p.contains("(meaning:"))
     }
+
+    func test_paragraph_prompt_asksForHeadwordLemma() {
+        let p = PromptTemplates.paragraph("They were running fast.", minLevel: .b1,
+                                          meaningLanguage: "Vietnamese", taxonomy: [])
+        XCTAssertTrue(p.lowercased().contains("headword") || p.lowercased().contains("lemma"))
+    }
 }

@@ -42,6 +42,9 @@ public enum PromptTemplates {
         "meaning" = the word's meaning in \(meaningLanguage).
 
         For "items": list EVERY word or short phrase worth learning at CEFR \(minLevel.rawValue.uppercased()) or above.
+        Give each "word" as its dictionary HEADWORD (lemma) — e.g. write 'run' for an occurrence of 'running',
+        'child' for 'children' — UNLESS the inflected form is itself a distinct dictionary entry
+        (e.g. 'interesting', 'glasses'), in which case keep that form.
         Be exhaustive — do NOT cap the count, do NOT omit items, do NOT summarize.
         Filter out only basic words (A1–A2 below the minimum).
         For each "category": prefer reusing one of [\(taxonomy.joined(separator: ", "))]; only invent a new one if none fits.

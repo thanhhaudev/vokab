@@ -440,6 +440,16 @@ struct PhraseDetailView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 14)
+        } else if enriching {
+            VStack(alignment: .leading, spacing: 6) {
+                SecLabel(L.t("Context of use", "Bối cảnh dùng"))
+                Text("Placeholder context-of-use sentence that spans a couple of lines here")
+                    .font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineSpacing(3)
+                    .skeleton()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .transition(.opacity)
         }
     }
 
@@ -455,6 +465,16 @@ struct PhraseDetailView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 14)
+        } else if enriching {
+            VStack(alignment: .leading, spacing: 6) {
+                SecLabel(L.t("Grammar & tense", "Ngữ pháp & thì"))
+                Text("Placeholder grammar and tense note line for skeleton shape")
+                    .font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineSpacing(3)
+                    .skeleton()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .transition(.opacity)
         }
     }
 

@@ -33,7 +33,7 @@ struct WordDetailView: View {
     /// True when the Relations group has any content (or is still enriching, where
     /// its subsections show skeletons) — so the group header is never shown bare.
     private var hasRelations: Bool {
-        if enriching { return true }
+        if loadingRelations { return true }
         let c = card
         return !(c?.synonyms.isEmpty ?? true) || !(c?.antonyms.isEmpty ?? true)
             || !(c?.wordFamily.isEmpty ?? true) || !(c?.confusables.isEmpty ?? true)

@@ -22,13 +22,17 @@ struct FormInfoPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Word + pronounce on the top row; role and IPA each on their own line
+            // Word + IPA + pronounce on the top row; the role goes on its own line
             // below. The role is plain wrapping text, NOT a fixed-size Pill — agy's
             // role labels can be phrase-length ("Past / Past participle (irregular)")
-            // and a Pill would balloon and squeeze the word into wrapping.
+            // and a Pill would balloon and squeeze the word into wrapping. The word
+            // keeps layout priority so a long IPA truncates before the word does.
             HStack(spacing: 8) {
                 Text(form.form).font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.textPrimary).lineLimit(1)
+                    .foregroundStyle(Theme.textPrimary).lineLimit(1).layoutPriority(1)
+                if let ipa = form.ipa, !ipa.isEmpty {
+                    Text(ipa).font(Theme.mono(12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                }
                 Spacer(minLength: 8)
                 PronounceButton(text: form.form,
                                 accent: Accent(settingsValue: env.settings.pronunciationAccent), size: .small)
@@ -37,9 +41,6 @@ struct FormInfoPopover: View {
                 Text(form.label)
                     .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.accent)
                     .fixedSize(horizontal: false, vertical: true)
-            }
-            if let ipa = form.ipa, !ipa.isEmpty {
-                Text(ipa).font(Theme.mono(12)).foregroundStyle(Theme.textSecondary).lineLimit(1)
             }
             Button {
                 if let id = lemmaEntryId { WindowManager.shared.showLibrary(select: id) }

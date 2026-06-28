@@ -87,8 +87,8 @@ final class AppEnvironment: ObservableObject {
                 NotificationManager.shared.postFailed(word: word, entryId: entryId)
             }
         }
-        let onWorkerComplete: @Sendable (Int64, CaptureService.AnalysisOutcome) -> Void = { id, outcome in
-            Task { @MainActor in CaptureController.shared.entryCompleted(id, outcome) }
+        let onWorkerComplete: @Sendable (Int64, CaptureService.AnalysisReport) -> Void = { id, report in
+            Task { @MainActor in CaptureController.shared.entryCompleted(id, report) }
         }
         self.captureWorker = CaptureWorker(
             capture: self.capture, maxConcurrent: settings.maxConcurrent,

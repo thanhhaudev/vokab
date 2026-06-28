@@ -17,13 +17,13 @@ final class CaptureController: ObservableObject {
     /// Last paragraph capture's candidates, so the toast's View can reopen extraction.
     private var pendingParagraph: (items: [ParagraphItem], translationVi: String?, source: SourceContext, language: String, rawText: String, failedChunks: Int)?
     /// Per-entry toast updaters, fired by `entryCompleted` when background analysis finishes.
-    private var pendingToasts: [Int64: @MainActor (CaptureService.AnalysisOutcome) -> Void] = [:]
+    private var pendingToasts: [Int64: @MainActor (CaptureService.AnalysisReport) -> Void] = [:]
 
     /// Called by CaptureWorker (via AppEnvironment) when an entry's analysis finishes;
     /// updates the toast that was registered for it in the `.pending` case.
-    @MainActor func entryCompleted(_ id: Int64, _ outcome: CaptureService.AnalysisOutcome) {
+    @MainActor func entryCompleted(_ id: Int64, _ report: CaptureService.AnalysisReport) {
         guard let handler = pendingToasts.removeValue(forKey: id) else { return }
-        handler(outcome)
+        handler(report)
     }
 
     private func captureGate(limit: Int) -> AsyncSemaphore {
@@ -41,7 +41,8 @@ final class CaptureController: ObservableObject {
     func capture(_ text: String, source: SourceContext? = nil,
                  language languageOverride: String? = nil,
                  type forcedType: CardType? = nil,
-                 minLevel: CEFR? = nil) {
+                 minLevel: CEFR? = nil,
+                 lemmatize: Bool = true) {
         guard let env else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -132,26 +133,48 @@ final class CaptureController: ObservableObject {
                         // The entry exists (analyzing) — let any open lookup popover
                         // resolve to it immediately instead of waiting for analysis.
                         WindowManager.notifyDataChanged()
-                        pendingToasts[entryId] = { [weak self] outcome in
+                        pendingToasts[entryId] = { [weak self] report in
                             guard let self, let env = self.env else { return }
-                            switch outcome {
+                            switch report.outcome {
                             case .ready:
-                                if let e = try? env.entries.entry(id: entryId) {
-                                    let summary = Self.summarize(entry: e, text: trimmed, wasDuplicate: false, env: env)
-                                    model.phase = .resolved(entry: e, fallback: summary, wasDuplicate: false)
-                                    NotificationManager.shared.postResolved(summary: summary, entryId: entryId,
+                                let shownId = report.resolvedId
+                                if let e = try? env.entries.entry(id: shownId) {
+                                    let summary = Self.summarize(entry: e, text: e.rawText, wasDuplicate: false, env: env)
+                                    if let lemma = report.lemma {
+                                        model.lemmaRename = (surface: lemma.surface, headword: lemma.headword)
+                                        // Keep original: re-capture the surface as its own entry, no lemmatizing.
+                                        let src2 = src, lang = language, surface = lemma.surface
+                                        model.onKeepOriginal = { [weak self] in
+                                            self?.capture(surface, source: src2, language: lang, lemmatize: false)
+                                            ToastCenter.shared.dismiss(model)
+                                        }
+                                    }
+                                    model.onView = { WindowManager.shared.showCaptureResult(entryId: shownId) }
+                                    // Undo deletes the *resolved* card. On a merge that is the pre-existing
+                                    // lemma card — deleting it would destroy data — so only allow Undo when
+                                    // the capture was renamed in place (a genuinely new card).
+                                    if report.lemma?.mergedIntoExisting != true {
+                                        model.onUndo = { id in
+                                            try? env.entries.delete(id: id)
+                                            WindowManager.notifyDataChanged()
+                                            ToastCenter.shared.dismiss(model)
+                                        }
+                                    }
+                                    model.phase = .resolved(entry: e, fallback: summary,
+                                                            wasDuplicate: report.lemma?.mergedIntoExisting == true)
+                                    NotificationManager.shared.postResolved(summary: summary, entryId: shownId,
                                                                             wasDuplicate: false)
                                     WindowManager.notifyDataChanged()
-                                    Task { await env.prefetcher.prefetch(id: entryId) }
+                                    Task { await env.prefetcher.prefetch(id: shownId) }
                                 }
                             case .failed:
-                                model.phase = .error("Phân tích thất bại")
+                                model.phase = .error(L.t("Analysis failed", "Phân tích thất bại"))
                                 WindowManager.notifyDataChanged()
-                            default:
-                                break   // skipped: leave the toast as-is
+                            case .skipped:
+                                break
                             }
                         }
-                        await env.captureWorker.enqueueAnalysis(entryId: entryId)
+                        await env.captureWorker.enqueueAnalysis(entryId: entryId, lemmatize: lemmatize)
 
                     case .blocked(let behavior):
                         model.phase = .error("Daily quota reached (\(behavior.rawValue)).")

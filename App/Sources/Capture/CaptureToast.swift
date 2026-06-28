@@ -29,6 +29,11 @@ final class ToastModel: ObservableObject {
     var meaningLanguage = "vi"
     var onView: (() -> Void)?
     var onUndo: ((Int64) -> Void)?
+    /// Set when an inflected capture was resolved to its lemma (e.g. "running"→"run").
+    /// Drives the "captured X → Y" line and the "Keep original" action.
+    var lemmaRename: (surface: String, headword: String)?
+    /// Re-captures the original surface form as its own entry (Keep original).
+    var onKeepOriginal: (() -> Void)?
     /// Called when `phase` changes so the host panel can re-fit its height.
     var onResize: (() -> Void)?
 }
@@ -127,6 +132,10 @@ struct CaptureToastView: View {
             }
         }
         .padding(.top, 4)
+        if let r = model.lemmaRename {
+            Text(L.t("captured \u{201C}\(r.surface)\u{201D} \u{2192} \(r.headword)", "đã bắt \u{201C}\(r.surface)\u{201D} \u{2192} \(r.headword)"))
+                .font(.system(size: 11)).foregroundStyle(Theme.textTertiary).padding(.top, 3).lineLimit(1)
+        }
         if let meaning = summary.meaning {
             Text(meaning + (summary.pos.map { " · \($0)" } ?? ""))
                 .font(.system(size: 12)).foregroundStyle(Theme.textSecondary).padding(.top, 3).lineLimit(1)
@@ -141,6 +150,9 @@ struct CaptureToastView: View {
             // offer Undo for a genuinely new capture.
             if let entryId, !wasDuplicate {
                 toastAction(L.t("Undo", "Hoàn tác"), system: "arrow.uturn.backward", primary: false) { model.onUndo?(entryId) }
+            }
+            if model.lemmaRename != nil, let keep = model.onKeepOriginal {
+                toastAction(L.t("Keep original", "Giữ nguyên gốc"), system: "textformat", primary: false) { keep() }
             }
         }
         .padding(.top, 10)

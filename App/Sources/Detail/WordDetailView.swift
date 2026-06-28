@@ -25,6 +25,16 @@ struct WordDetailView: View {
 
     private var hasForms: Bool { !(card?.forms.isEmpty ?? true) }
 
+    /// True when the Relations group has any content (or is still enriching, where
+    /// its subsections show skeletons) — so the group header is never shown bare.
+    private var hasRelations: Bool {
+        if enriching { return true }
+        let c = card
+        return !(c?.synonyms.isEmpty ?? true) || !(c?.antonyms.isEmpty ?? true)
+            || !(c?.wordFamily.isEmpty ?? true) || !(c?.confusables.isEmpty ?? true)
+            || (c?.etymology?.isEmpty == false)
+    }
+
     /// Normalized captured surface, for highlighting its chip in the Forms row.
     private var capturedKey: String? {
         guard let f = current.capturedForm, !f.isEmpty else { return nil }
@@ -174,7 +184,7 @@ struct WordDetailView: View {
             VStack(alignment: .leading, spacing: 8) {
                 SecLabel(L.t("Forms", "Dạng chia"))
                 FlowLayout(spacing: 6) {
-                    ForEach(forms, id: \.form) { f in
+                    ForEach(forms, id: \.self) { f in
                         formChip(f)
                     }
                 }
@@ -300,7 +310,7 @@ struct WordDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Rectangle().fill(Theme.borderTertiary).frame(width: Theme.hairline(displayScale))
                 VStack(alignment: .leading, spacing: 0) {
-                    groupHeader(L.t("Relations", "Liên quan"))
+                    if hasRelations { groupHeader(L.t("Relations", "Liên quan")) }
                     synAnt
                     wordFamilySection
                     confusablesSection
@@ -316,7 +326,7 @@ struct WordDetailView: View {
                 contextOfUseSection
                 examples
                 seenIn
-                groupHeader(L.t("Relations", "Liên quan"))
+                if hasRelations { groupHeader(L.t("Relations", "Liên quan")) }
                 synAnt
                 wordFamilySection
                 confusablesSection

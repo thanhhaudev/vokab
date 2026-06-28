@@ -79,7 +79,7 @@ public struct Confusable: Codable, Sendable, Equatable {
 
 /// One inflected form of a word: its grammatical role plus the form itself
 /// (e.g. {label: "past", form: "ran"}). POS-appropriate; filled by enrichment.
-public struct WordForm: Codable, Sendable, Equatable {
+public struct WordForm: Codable, Sendable, Equatable, Hashable {
     public var label: String
     public var form: String
 

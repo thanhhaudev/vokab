@@ -125,36 +125,96 @@ public struct CaptureService: Sendable {
         return .pending(entryId: id, type: type)
     }
 
-    public enum AnalysisOutcome: Sendable { case ready, failed, skipped }
+    public enum AnalysisOutcome: Sendable, Equatable { case ready, failed, skipped }
 
-    /// Background tier-1 analysis. Returns the outcome so callers can react
-    /// (e.g. notify on failure). Never throws — transport errors mark the entry failed.
+    /// What lemma resolution did during analysis, for the capture toast.
+    public struct LemmaResolution: Sendable, Equatable {
+        public let surface: String           // what the user captured, e.g. "running"
+        public let headword: String          // resolved lemma, e.g. "run"
+        public let mergedIntoExisting: Bool  // true = pending entry folded into an existing lemma card
+        public init(surface: String, headword: String, mergedIntoExisting: Bool) {
+            self.surface = surface; self.headword = headword; self.mergedIntoExisting = mergedIntoExisting
+        }
+    }
+
+    /// Result of background analysis. `resolvedId` is the surviving entry id —
+    /// equal to the input id unless an inflection merged into an existing lemma
+    /// card, in which case it points at that card. `lemma` is nil when no rename
+    /// happened (the captured text was already the headword).
+    public struct AnalysisReport: Sendable, Equatable {
+        public let outcome: AnalysisOutcome
+        public let resolvedId: Int64
+        public let lemma: LemmaResolution?
+        public init(outcome: AnalysisOutcome, resolvedId: Int64, lemma: LemmaResolution?) {
+            self.outcome = outcome; self.resolvedId = resolvedId; self.lemma = lemma
+        }
+    }
+
+    /// Background tier-1 analysis. Returns a report so callers can react (notify
+    /// on failure, show the lemma rename). Never throws — transport errors mark the
+    /// entry failed. When `lemmatize` is true (default) and agy resolves a headword
+    /// that differs from the captured surface, the entry is renamed to the lemma
+    /// or merged into an existing lemma card.
     @discardableResult
-    public func runAnalysis(entryId: Int64) async -> AnalysisOutcome {
+    public func runAnalysis(entryId: Int64, lemmatize: Bool = true) async -> AnalysisReport {
+        func report(_ o: AnalysisOutcome) -> AnalysisReport { AnalysisReport(outcome: o, resolvedId: entryId, lemma: nil) }
         guard let entry = try? entries.entry(id: entryId),
               entry.analysisState == AnalysisState.analyzing.rawValue,
-              let type = entry.cardType else { return .skipped }
+              let type = entry.cardType else { return report(.skipped) }
         let language = entry.language
         let text = entry.rawText
         let taxonomy = (try? categories.currentTaxonomy()) ?? []
         do {
-            let json: String; let cefr: String?; let frequency: String?; let rawCategory: String?
+            // Phrases are never lemmatized; only words carry a headword.
             if type == .word {
                 let card = try await agy.defineWordCore(text, language: language, taxonomy: taxonomy)
-                json = try encode(card); cefr = card.cefrLevel; frequency = card.frequency; rawCategory = card.category
+                let json = try encode(card)
+                let resolvedHeadword = cleanedHeadword(card.headword) ?? text
+                let renames = lemmatize && TextKey.normalize(resolvedHeadword) != TextKey.normalize(text)
+                let cacheText = renames ? resolvedHeadword : text
+                try quota.increment(on: entry.capturedAt)
+                try cache.upsert(text: cacheText, language: language, meaningLanguage: settings.meaningLanguage, aiResult: json, now: entry.capturedAt)
+                let category = try categories.canonicalize(card.category, now: entry.capturedAt)
+                if renames {
+                    let res = try entries.resolveHeadwordAndMarkAnalyzed(
+                        id: entryId, headword: resolvedHeadword, capturedForm: text, language: language,
+                        aiResult: json, cefr: card.cefrLevel, frequency: card.frequency, category: category,
+                        captureSentence: entry.captureSentence, sourceApp: entry.sourceApp, sourceURL: entry.sourceURL)
+                    let lemma: LemmaResolution
+                    let resolvedId: Int64
+                    switch res {
+                    case .renamedInPlace:
+                        lemma = LemmaResolution(surface: text, headword: resolvedHeadword, mergedIntoExisting: false)
+                        resolvedId = entryId
+                    case .mergedInto(let existingId):
+                        lemma = LemmaResolution(surface: text, headword: resolvedHeadword, mergedIntoExisting: true)
+                        resolvedId = existingId
+                    }
+                    return AnalysisReport(outcome: .ready, resolvedId: resolvedId, lemma: lemma)
+                }
+                _ = try entries.markAnalyzed(id: entryId, aiResult: json, cefr: card.cefrLevel, frequency: card.frequency, category: category)
+                return report(.ready)
             } else {
                 let card = try await agy.analyzePhraseCore(text, taxonomy: taxonomy)
-                json = try encode(card); cefr = card.cefrLevel; frequency = nil; rawCategory = card.category
+                let json = try encode(card)
+                try quota.increment(on: entry.capturedAt)
+                try cache.upsert(text: text, language: language, meaningLanguage: settings.meaningLanguage, aiResult: json, now: entry.capturedAt)
+                let category = try categories.canonicalize(card.category, now: entry.capturedAt)
+                _ = try entries.markAnalyzed(id: entryId, aiResult: json, cefr: card.cefrLevel, frequency: nil, category: category)
+                return report(.ready)
             }
-            try quota.increment(on: entry.capturedAt)
-            try cache.upsert(text: text, language: language, meaningLanguage: settings.meaningLanguage, aiResult: json, now: entry.capturedAt)
-            let category = try categories.canonicalize(rawCategory, now: entry.capturedAt)
-            _ = try entries.markAnalyzed(id: entryId, aiResult: json, cefr: cefr, frequency: frequency, category: category)
-            return .ready
         } catch {
             try? entries.markAnalysisFailed(id: entryId)
-            return .failed
+            return report(.failed)
         }
+    }
+
+    /// Trims/normalizes agy's raw headword string; returns nil when empty so the
+    /// caller falls back to the captured text.
+    private func cleanedHeadword(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let cleaned = InputCleaner.clean(raw, type: .word)
+        return cleaned.isEmpty ? nil : cleaned
     }
 
     /// Persists a chosen paragraph item as a first-class **word or phrase** entry,

@@ -465,6 +465,57 @@ final class CaptureServiceTests: XCTestCase {
         XCTAssertEqual(try h.entries.all().count, 0)     // nothing inserted
     }
 
+    func test_runAnalysis_renamesInflectionToLemma() async throws {
+        let h = try makeHarnessForAsync(wordJSON: #"{"headword":"run","senses":[{"pos":"verb","meaning":"chạy"}]}"#)
+        let src = SourceContext(appName: "t", url: nil, capturedAt: Date())
+        guard case let .pending(id, _) = try h.capture.beginCapture(text: "running", language: "en", source: src)
+        else { return XCTFail() }
+        let report = await h.capture.runAnalysis(entryId: id)
+        XCTAssertEqual(report.outcome, .ready)
+        XCTAssertEqual(report.resolvedId, id)
+        XCTAssertEqual(report.lemma?.headword, "run")
+        XCTAssertEqual(report.lemma?.surface, "running")
+        XCTAssertEqual(report.lemma?.mergedIntoExisting, false)
+        let e = try XCTUnwrap(h.entries.entry(id: id))
+        XCTAssertEqual(e.rawText, "run")
+        XCTAssertEqual(e.capturedForm, "running")
+    }
+
+    func test_runAnalysis_mergesInflectionIntoExistingLemma() async throws {
+        let h = try makeHarnessForAsync(wordJSON: #"{"headword":"run"}"#)
+        let src = SourceContext(appName: "t", url: nil, capturedAt: Date())
+        _ = try h.entries.insertCapture(Entry(rawText: "run", type: "word", language: "en",
+            capturedAt: Date(), aiResult: "{}"), dueDate: Date())
+        guard case let .pending(id, _) = try h.capture.beginCapture(text: "ran", language: "en", source: src)
+        else { return XCTFail() }
+        let report = await h.capture.runAnalysis(entryId: id)
+        XCTAssertEqual(report.lemma?.mergedIntoExisting, true)
+        XCTAssertNotEqual(report.resolvedId, id)              // points at the existing "run" card
+        XCTAssertNil(try h.entries.entry(id: id))             // pending deleted
+        XCTAssertEqual(try h.entries.all().count, 1)
+    }
+
+    func test_runAnalysis_baseForm_noRename_lemmaNil() async throws {
+        let h = try makeHarnessForAsync(wordJSON: #"{"headword":"run","senses":[{"pos":"verb"}]}"#)
+        let src = SourceContext(appName: "t", url: nil, capturedAt: Date())
+        guard case let .pending(id, _) = try h.capture.beginCapture(text: "run", language: "en", source: src)
+        else { return XCTFail() }
+        let report = await h.capture.runAnalysis(entryId: id)
+        XCTAssertNil(report.lemma)                            // headword == surface
+        XCTAssertNil(try h.entries.entry(id: id)?.capturedForm)
+        XCTAssertEqual(try h.entries.entry(id: id)?.rawText, "run")
+    }
+
+    func test_runAnalysis_lemmatizeFalse_keepsSurface() async throws {
+        let h = try makeHarnessForAsync(wordJSON: #"{"headword":"run","senses":[{"pos":"verb"}]}"#)
+        let src = SourceContext(appName: "t", url: nil, capturedAt: Date())
+        guard case let .pending(id, _) = try h.capture.beginCapture(text: "running", language: "en", source: src)
+        else { return XCTFail() }
+        let report = await h.capture.runAnalysis(entryId: id, lemmatize: false)
+        XCTAssertNil(report.lemma)
+        XCTAssertEqual(try h.entries.entry(id: id)?.rawText, "running")   // not renamed
+    }
+
     // MARK: - Fix 1: unified empty guard in capture(...)
 
     func testCaptureThrowsEmptyInputForPurePunctuation() async throws {

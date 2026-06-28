@@ -6,7 +6,7 @@ public actor CaptureWorker {
     private let gate: AsyncSemaphore
     private let onChange: @Sendable () -> Void
     private let onFailure: (@Sendable (Int64) -> Void)?
-    private let onComplete: (@Sendable (Int64, CaptureService.AnalysisOutcome) -> Void)?
+    private let onComplete: (@Sendable (Int64, CaptureService.AnalysisReport) -> Void)?
     private let onActivity: (@Sendable (Int) -> Void)?
     private var inflight = Set<Int64>()
     private var tasks: [Int64: Task<Void, Never>] = [:]
@@ -14,7 +14,7 @@ public actor CaptureWorker {
     public init(capture: CaptureService, maxConcurrent: Int = 2,
                 onChange: @escaping @Sendable () -> Void,
                 onFailure: (@Sendable (Int64) -> Void)? = nil,
-                onComplete: (@Sendable (Int64, CaptureService.AnalysisOutcome) -> Void)? = nil,
+                onComplete: (@Sendable (Int64, CaptureService.AnalysisReport) -> Void)? = nil,
                 onActivity: (@Sendable (Int) -> Void)? = nil) {
         self.capture = capture
         self.gate = AsyncSemaphore(max(1, maxConcurrent))
@@ -24,10 +24,13 @@ public actor CaptureWorker {
         self.onActivity = onActivity
     }
 
+    private var lemmatizeFlags: [Int64: Bool] = [:]
+
     /// Lên lịch phân tích một entry pending. Coalesce: bỏ qua nếu đang chạy.
-    public func enqueueAnalysis(entryId: Int64) {
+    public func enqueueAnalysis(entryId: Int64, lemmatize: Bool = true) {
         guard !inflight.contains(entryId) else { return }
         inflight.insert(entryId)
+        lemmatizeFlags[entryId] = lemmatize
         onActivity?(inflight.count)
         tasks[entryId] = Task { await self.run(entryId) }
     }
@@ -39,16 +42,17 @@ public actor CaptureWorker {
     }
 
     private func run(_ id: Int64) async {
-        // Cancelled while queued (e.g. shutdown) → skip; never over-signal.
-        let outcome = (try? await gate.withPermit {
-            await capture.runAnalysis(entryId: id)
-        }) ?? .skipped
+        let lemmatize = lemmatizeFlags[id] ?? true
+        let report = (try? await gate.withPermit {
+            await capture.runAnalysis(entryId: id, lemmatize: lemmatize)
+        }) ?? CaptureService.AnalysisReport(outcome: .skipped, resolvedId: id, lemma: nil)
         inflight.remove(id)
+        lemmatizeFlags[id] = nil
         onActivity?(inflight.count)
         tasks[id] = nil
         onChange()
-        if outcome == .failed { onFailure?(id) }
-        onComplete?(id, outcome)
+        if report.outcome == .failed { onFailure?(id) }
+        onComplete?(id, report)
     }
 
     /// Test helper: chờ mọi job đã enqueue hoàn tất.

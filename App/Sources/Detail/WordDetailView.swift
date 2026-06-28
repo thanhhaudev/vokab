@@ -271,6 +271,17 @@ struct WordDetailView: View {
         }
     }
 
+    // MARK: Group header helper
+
+    /// A light heading that groups several sub-sections (e.g. "Usage", "Relations").
+    private func groupHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Theme.textPrimary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 2)
+    }
+
     // MARK: Reference sections (two columns when wide, one when narrow)
 
     /// The non-senses sections. On a wide detail pane they flow into two columns
@@ -279,33 +290,37 @@ struct WordDetailView: View {
         if contentWidth >= 560 {
             HStack(alignment: .top, spacing: 0) {
                 VStack(alignment: .leading, spacing: 0) {
-                    etymology
-                    seenIn
+                    groupHeader(L.t("Usage", "Cách dùng"))
+                    collocationsSection
+                    grammarSection
+                    contextOfUseSection
                     examples
-                    confusablesSection
+                    seenIn
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Rectangle().fill(Theme.borderTertiary).frame(width: Theme.hairline(displayScale))
                 VStack(alignment: .leading, spacing: 0) {
+                    groupHeader(L.t("Relations", "Liên quan"))
                     synAnt
                     wordFamilySection
-                    collocationsSection
-                    contextOfUseSection
-                    grammarSection
+                    confusablesSection
+                    etymology
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                etymology
-                seenIn
+                groupHeader(L.t("Usage", "Cách dùng"))
+                collocationsSection
+                grammarSection
+                contextOfUseSection
                 examples
+                seenIn
+                groupHeader(L.t("Relations", "Liên quan"))
                 synAnt
                 wordFamilySection
-                collocationsSection
                 confusablesSection
-                contextOfUseSection
-                grammarSection
+                etymology
             }
         }
     }

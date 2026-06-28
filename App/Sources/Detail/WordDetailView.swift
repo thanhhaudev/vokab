@@ -10,6 +10,7 @@ struct WordDetailView: View {
     @EnvironmentObject private var env: AppEnvironment
     @State private var current: Entry
     @State private var enriching = false
+    @State private var backfilling = false
     @State private var addingExamples = false
     /// Measured content width; drives the 1-vs-2-column reference layout.
     @State private var contentWidth: CGFloat = 0
@@ -23,7 +24,11 @@ struct WordDetailView: View {
     private var entry: Entry { current }
     private var card: WordCard? { CardDecoding.word(current) }
 
-    private var hasForms: Bool { !(card?.forms.isEmpty ?? true) }
+    private var hasForms: Bool { !(card?.forms.isEmpty ?? true) || loadingRelations }
+
+    /// Sections fed by tier-2 relations enrichment OR the relations backfiller
+    /// (old cards) are "pending" in both windows — so they skeleton, never pop in.
+    private var loadingRelations: Bool { enriching || backfilling }
 
     /// True when the Relations group has any content (or is still enriching, where
     /// its subsections show skeletons) — so the group header is never shown bare.
@@ -93,10 +98,14 @@ struct WordDetailView: View {
             // entries enriched before those fields existed. New captures already have
             // them from relations. Require a decodable card so a corrupt entry is never overwritten.
             if current.cardType == .word, let c = CardDecoding.word(current),
-               (c.collocations.isEmpty && c.confusables.isEmpty) || c.contextOfUse == nil || c.grammarNote == nil || c.irregular == nil,
-               let updated = try? await env.relationsBackfiller.backfill(entry: current) {
-                current = updated
-                WindowManager.notifyDataChanged()
+               (c.collocations.isEmpty && c.confusables.isEmpty) || c.contextOfUse == nil || c.grammarNote == nil || c.irregular == nil {
+                backfilling = true
+                let updated = try? await env.relationsBackfiller.backfill(entry: current)
+                withAnimation(.easeOut(duration: 0.25)) {
+                    if let updated { current = updated }
+                    backfilling = false
+                }
+                if updated != nil { WindowManager.notifyDataChanged() }
             }
         }
     }
@@ -196,6 +205,17 @@ struct WordDetailView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 14)
+        } else if loadingRelations {
+            VStack(alignment: .leading, spacing: 8) {
+                SecLabel(L.t("Forms", "Dạng chia"))
+                FlowLayout(spacing: 6) {
+                    ForEach(["running", "walked", "forms"], id: \.self) { Chip($0) }
+                }
+                .skeleton()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .transition(.opacity)
         }
     }
 
@@ -531,6 +551,17 @@ struct WordDetailView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 14)
+        } else if loadingRelations {
+            VStack(alignment: .leading, spacing: 8) {
+                SecLabel(L.t("Collocations", "Kết hợp từ"))
+                FlowLayout(spacing: 6) {
+                    ForEach(["make a decision", "go for"], id: \.self) { Chip($0) }
+                }
+                .skeleton()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .transition(.opacity)
         }
     }
 
@@ -556,6 +587,16 @@ struct WordDetailView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 14)
+        } else if loadingRelations {
+            VStack(alignment: .leading, spacing: 8) {
+                SecLabel(L.t("Easily confused", "Dễ nhầm"))
+                Text("Placeholder confusable word and its short note line")
+                    .font(.system(size: 14)).foregroundStyle(Theme.textSecondary)
+                    .skeleton()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .transition(.opacity)
         }
     }
 
@@ -571,6 +612,16 @@ struct WordDetailView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 14)
+        } else if loadingRelations {
+            VStack(alignment: .leading, spacing: 6) {
+                SecLabel(L.t("Context of use", "Bối cảnh dùng"))
+                Text("Placeholder context-of-use sentence that spans a couple of lines here")
+                    .font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineSpacing(3)
+                    .skeleton()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .transition(.opacity)
         }
     }
 
@@ -586,6 +637,16 @@ struct WordDetailView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 14)
+        } else if loadingRelations {
+            VStack(alignment: .leading, spacing: 6) {
+                SecLabel(L.t("Grammar & tense", "Ngữ pháp & thì"))
+                Text("Placeholder grammar and tense note line for skeleton shape")
+                    .font(.system(size: 13)).foregroundStyle(Theme.textSecondary).lineSpacing(3)
+                    .skeleton()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .transition(.opacity)
         }
     }
 

@@ -2,7 +2,7 @@ import Foundation
 
 /// Outcome of the synchronous `beginCapture` phase.
 public enum BeganCapture: Sendable, Equatable {
-    case duplicate(entryId: Int64, type: CardType)
+    case duplicate(entryId: Int64, type: CardType, viaAlias: Bool)
     case ready(entryId: Int64, type: CardType)
     case pending(entryId: Int64, type: CardType)
     case paragraph
@@ -108,10 +108,10 @@ public struct CaptureService: Sendable {
         // lemmatizing — Keep Original (lemmatize:false) must be able to create the
         // surface as its own entry even though it's an alias of the lemma.
         if let existing = try entries.find(rawText: cleaned, language: language) {
-            return .duplicate(entryId: existing.id ?? -1, type: existing.cardType ?? type)
+            return .duplicate(entryId: existing.id ?? -1, type: existing.cardType ?? type, viaAlias: false)
         }
         if lemmatize, let existing = try entries.findByAlias(cleaned, language: language) {
-            return .duplicate(entryId: existing.id ?? -1, type: existing.cardType ?? type)
+            return .duplicate(entryId: existing.id ?? -1, type: existing.cardType ?? type, viaAlias: true)
         }
         if let cached = try cache.lookup(text: cleaned, language: language, meaningLanguage: settings.meaningLanguage) {
             let meta = singleMeta(type: type, json: cached.aiResult)

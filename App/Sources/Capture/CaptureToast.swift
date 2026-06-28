@@ -34,6 +34,8 @@ final class ToastModel: ObservableObject {
     var lemmaRename: (surface: String, headword: String)?
     /// Re-captures the original surface form as its own entry (Keep original).
     var onKeepOriginal: (() -> Void)?
+    /// Set on an alias-duplicate (homograph) toast — re-captures the surface as its own entry.
+    var onSaveSeparately: (() -> Void)?
     /// Called when `phase` changes so the host panel can re-fit its height.
     var onResize: (() -> Void)?
 }

@@ -583,4 +583,21 @@ final class CaptureServiceTests: XCTestCase {
         XCTAssertEqual(try h.entries.all().count, 0)      // no entry inserted
         XCTAssertEqual(try h.quota.count(on: now), 0)     // quota not charged
     }
+
+    func test_beginCapture_duplicate_flagsAliasVsExact() throws {
+        let h = try makeHarnessForAsync(wordJSON: "{}")
+        let src = SourceContext(appName: "t", url: nil, capturedAt: Date())
+        let id = try h.entries.insertCapture(
+            Entry(rawText: "run", type: "word", language: "en", capturedAt: Date(), aiResult: "{}"),
+            dueDate: Date())
+        try h.entries.addAlias(entryId: id, surface: "ran", language: "en")
+        // exact raw_text hit → viaAlias false
+        if case let .duplicate(_, _, viaAlias) = try h.capture.beginCapture(text: "run", language: "en", source: src) {
+            XCTAssertFalse(viaAlias)
+        } else { XCTFail("expected duplicate for exact") }
+        // alias hit → viaAlias true
+        if case let .duplicate(_, _, viaAlias) = try h.capture.beginCapture(text: "ran", language: "en", source: src) {
+            XCTAssertTrue(viaAlias)
+        } else { XCTFail("expected duplicate for alias") }
+    }
 }

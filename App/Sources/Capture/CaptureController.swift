@@ -101,13 +101,20 @@ final class CaptureController: ObservableObject {
                                                             source: src, language: language, rawText: trimmed,
                                                             failedChunks: result.failedChunks)
 
-                    case .duplicate(let entryId, _):
+                    case .duplicate(let entryId, _, let viaAlias):
                         let entry = try? env.entries.entry(id: entryId)
                         let dupSummary = entry.map {
                             Self.summarize(entry: $0, text: trimmed, wasDuplicate: true, env: env)
                         } ?? trimmed
                         model.onView = { WindowManager.shared.showCaptureResult(entryId: entryId) }
                         model.phase = .resolved(entry: entry, fallback: dupSummary, wasDuplicate: true)
+                        if viaAlias {
+                            let surface = trimmed, lang = language, src2 = src
+                            model.onSaveSeparately = { [weak self] in
+                                self?.capture(surface, source: src2, language: lang, lemmatize: false)
+                                ToastCenter.shared.dismiss(model)
+                            }
+                        }
                         WindowManager.notifyDataChanged()
 
                     case .ready(let entryId, _):

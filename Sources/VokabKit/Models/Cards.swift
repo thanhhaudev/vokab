@@ -102,7 +102,7 @@ public struct WordForm: Codable, Sendable, Equatable, Hashable {
         ipa = decodeString(c, "ipa")
         usageNote = decodeString(c, "usageNote")
         commonError = decodeString(c, "commonError")
-        examples = decodeArray(c, "examples")
+        examples = decodeArray(c, "examples").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
     }
 }
 

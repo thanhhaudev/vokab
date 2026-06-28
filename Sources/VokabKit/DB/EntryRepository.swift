@@ -82,8 +82,8 @@ public struct EntryRepository: Sendable {
 
     /// Records every inflected form (from a word's `forms[]`) as a dedup alias of the
     /// entry, so capturing any known inflection of an enriched word dedupes instantly.
-    /// Idempotent (`INSERT OR IGNORE`); skips a form whose normalized surface equals
-    /// the entry's own headword key (already found by `find`).
+    /// Idempotent (`INSERT OR IGNORE`). A form equal to the headword may be inserted as
+    /// a harmless self-alias — `find(rawText:)` resolves the headword first anyway.
     public func seedAliases(entryId: Int64, forms: [WordForm], language: String) throws {
         let keys = Set(forms.map { TextKey.normalize($0.form) }.filter { !$0.isEmpty })
         guard !keys.isEmpty else { return }

@@ -191,16 +191,14 @@ struct WordDetailView: View {
     @ViewBuilder private var formsSection: some View {
         if let forms = card?.forms, !forms.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                SecLabel(L.t("Forms", "Dạng chia"))
+                HStack(spacing: 8) {
+                    SecLabel(L.t("Forms", "Dạng chia"))
+                    if card?.irregular == true { irregularTag }
+                }
                 FlowLayout(spacing: 6) {
                     ForEach(forms, id: \.self) { f in
                         formChip(f)
                     }
-                }
-                if card?.irregular == true {
-                    Label(L.t("irregular", "bất quy tắc"), systemImage: "exclamationmark.triangle")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.dyn(light: 0xB26B00, dark: 0xE0A33A))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -242,6 +240,17 @@ struct WordDetailView: View {
                                             lineWidth: Theme.hairline(displayScale)))
             .foregroundStyle(captured ? Theme.accent : Theme.textSecondary)
         }
+    }
+
+    /// A soft amber tag beside the FORMS label marking an irregular word (ran/run,
+    /// good/better) — a neutral property cue, not a warning (hence no alert icon).
+    private var irregularTag: some View {
+        let amber = Theme.dyn(light: 0xB26B00, dark: 0xE0A33A)
+        return Text(L.t("irregular", "bất quy tắc"))
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(amber)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(amber.opacity(0.14), in: Capsule())
     }
 
     /// One sense: pos pill on its own line, then the meaning, then a dimmer

@@ -77,6 +77,26 @@ public struct Confusable: Codable, Sendable, Equatable {
     }
 }
 
+/// One inflected form of a word: its grammatical role plus the form itself
+/// (e.g. {label: "past", form: "ran"}). POS-appropriate; filled by enrichment.
+public struct WordForm: Codable, Sendable, Equatable {
+    public var label: String
+    public var form: String
+
+    public init(label: String, form: String) {
+        self.label = label
+        self.form = form
+    }
+
+    // Lenient: a missing label/form decodes to "" (the UI filters empty forms);
+    // `.convertFromSnakeCase` leaves single-token keys unchanged.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: GenericKey.self)
+        label = decodeString(c, "label") ?? ""
+        form = decodeString(c, "form") ?? ""
+    }
+}
+
 /// Single-word analysis (SPEC §7a).
 public struct WordCard: Codable, Sendable, Equatable {
     /// One part-of-speech sense of a word (SPEC: multi-sense words).
@@ -128,6 +148,9 @@ public struct WordCard: Codable, Sendable, Equatable {
     public var wordFamily: [String]
     public var collocations: [String]
     public var confusables: [Confusable]
+    public var forms: [WordForm]
+    /// nil = forms were never fetched (backfill sentinel); set once enrichment ran.
+    public var irregular: Bool?
     public var category: String?
     public var contextOfUse: String?
     public var grammarNote: String?
@@ -188,6 +211,10 @@ public struct WordCard: Codable, Sendable, Equatable {
         let rawConfusables = (try? c.decodeIfPresent([Confusable].self,
                                                       forKey: GenericKey(stringValue: "confusables")!)) ?? nil ?? []
         confusables = rawConfusables.filter { !$0.word.trimmingCharacters(in: .whitespaces).isEmpty }
+        let rawForms = (try? c.decodeIfPresent([WordForm].self,
+                                               forKey: GenericKey(stringValue: "forms")!)) ?? nil ?? []
+        forms = rawForms.filter { !$0.form.trimmingCharacters(in: .whitespaces).isEmpty }
+        irregular = decodeBool(c, "irregular")
         category = decodeString(c, "category")
         contextOfUse = decodeString(c, "contextOfUse")
         grammarNote = decodeString(c, "grammarNote")
@@ -219,6 +246,8 @@ public struct WordCard: Codable, Sendable, Equatable {
         if wordFamily.isEmpty { c.wordFamily = other.wordFamily }
         if collocations.isEmpty { c.collocations = other.collocations }
         if confusables.isEmpty { c.confusables = other.confusables }
+        if forms.isEmpty { c.forms = other.forms }
+        c.irregular = irregular ?? other.irregular
         if senses.isEmpty { c.senses = other.senses }
         c.category = pick(category, other.category)
         c.contextOfUse = pick(contextOfUse, other.contextOfUse)

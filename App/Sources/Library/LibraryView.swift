@@ -733,7 +733,10 @@ struct LibraryView: View {
         var rows = model.rows
         if !search.isEmpty {
             let q = search.lowercased()
-            rows = rows.filter { $0.entry.rawText.lowercased().contains(q) }
+            rows = rows.filter {
+                $0.entry.rawText.lowercased().contains(q)
+                    || ($0.entry.capturedForm?.lowercased().contains(q) ?? false)
+            }
         }
         switch sortOrder {
         case .recent:

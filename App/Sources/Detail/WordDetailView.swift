@@ -125,6 +125,10 @@ struct WordDetailView: View {
                         .compactMap { $0 }.joined(separator: " · "))
                     .font(.system(size: 12)).foregroundStyle(Theme.textTertiary).lineLimit(1)
             }
+            if let surface = entry.capturedForm, !surface.isEmpty {
+                Text(L.t("captured as \u{201C}\(surface)\u{201D}", "đã bắt dưới dạng \u{201C}\(surface)\u{201D}"))
+                    .font(.system(size: 12)).foregroundStyle(Theme.textTertiary)
+            }
             FlowLayout(spacing: 6) {
                 MultiPill(card?.combinedPOS, style: .type)
                 if let cefr = card?.cefrLevel, cefr.cefrLevel != nil { Pill.cefr(cefr) }

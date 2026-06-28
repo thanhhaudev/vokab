@@ -22,11 +22,8 @@ struct FormInfoPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Word + IPA + pronounce on the top row; the role goes on its own line
-            // below. The role is plain wrapping text, NOT a fixed-size Pill — agy's
-            // role labels can be phrase-length ("Past / Past participle (irregular)")
-            // and a Pill would balloon and squeeze the word into wrapping. The word
-            // keeps layout priority so a long IPA truncates before the word does.
+            // Word + IPA + pronounce on the top row; the word keeps layout priority so
+            // a long IPA truncates before the word wraps.
             HStack(spacing: 8) {
                 Text(form.form).font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary).lineLimit(1).layoutPriority(1)
@@ -37,18 +34,25 @@ struct FormInfoPopover: View {
                 PronounceButton(text: form.form,
                                 accent: Accent(settingsValue: env.settings.pronunciationAccent), size: .small)
             }
-            if !form.label.isEmpty {
-                Text(form.label)
-                    .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.accent)
-                    .fixedSize(horizontal: false, vertical: true)
+            // Role (as a compact accent pill) + the lemma link on ONE flowing row — so
+            // they no longer read as two redundant purple lines. A phrase-length role
+            // (e.g. "Past / Past participle (irregular)") simply wraps to its own line
+            // within the flow rather than ballooning the header.
+            FlowLayout(spacing: 8) {
+                if !form.label.isEmpty {
+                    Text(form.label)
+                        .font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.accent)
+                        .padding(.horizontal, 8).padding(.vertical, 2)
+                        .background(Theme.accent.opacity(0.15), in: Capsule())
+                }
+                Button {
+                    if let id = lemmaEntryId { WindowManager.shared.showLibrary(select: id) }
+                } label: {
+                    Text(L.t("form of \(headword)", "dạng của \(headword)"))
+                        .font(.system(size: 12)).foregroundStyle(Theme.accent)
+                }
+                .buttonStyle(.plain)
             }
-            Button {
-                if let id = lemmaEntryId { WindowManager.shared.showLibrary(select: id) }
-            } label: {
-                Text(L.t("form of \(headword)", "dạng của \(headword)"))
-                    .font(.system(size: 12)).foregroundStyle(Theme.accent)
-            }
-            .buttonStyle(.plain)
             if !hasDetail && loading {
                 HStack(spacing: 7) {
                     ActivityDots(diameter: 4)

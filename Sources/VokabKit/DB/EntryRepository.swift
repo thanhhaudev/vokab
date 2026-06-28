@@ -80,6 +80,18 @@ public struct EntryRepository: Sendable {
         try dbQueue.write { db in try Self.insertAlias(db, entryId: entryId, key: key, language: language) }
     }
 
+    /// Records every inflected form (from a word's `forms[]`) as a dedup alias of the
+    /// entry, so capturing any known inflection of an enriched word dedupes instantly.
+    /// Idempotent (`INSERT OR IGNORE`); skips a form whose normalized surface equals
+    /// the entry's own headword key (already found by `find`).
+    public func seedAliases(entryId: Int64, forms: [WordForm], language: String) throws {
+        let keys = Set(forms.map { TextKey.normalize($0.form) }.filter { !$0.isEmpty })
+        guard !keys.isEmpty else { return }
+        try dbQueue.write { db in
+            for key in keys { try Self.insertAlias(db, entryId: entryId, key: key, language: language) }
+        }
+    }
+
     /// Shared alias insert — used by `addAlias` and inside
     /// `resolveHeadwordAndMarkAnalyzed`'s write transaction. `key` is already normalized.
     static func insertAlias(_ db: Database, entryId: Int64, key: String, language: String) throws {

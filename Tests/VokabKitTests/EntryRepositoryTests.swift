@@ -178,4 +178,20 @@ final class ResolveHeadwordTests: XCTestCase {
         XCTAssertEqual(res, .mergedInto(existingId: existing))
         XCTAssertEqual(try repo.findByAlias("ran", language: "en")?.id, existing)   // alias → survivor
     }
+
+    func test_seedAliases_makesEachFormDedupe() throws {
+        let queue = try VokabDatabase.makeInMemory()
+        let repo = EntryRepository(dbQueue: queue)
+        let id = try repo.insertCapture(
+            Entry(rawText: "run", type: "word", language: "en", capturedAt: Date(), aiResult: "{}"),
+            dueDate: Date())
+        try repo.seedAliases(entryId: id, forms: [
+            WordForm(label: "past", form: "ran"),
+            WordForm(label: "-ing", form: "running"),
+        ], language: "en")
+        XCTAssertEqual(try repo.findByAlias("ran", language: "en")?.id, id)
+        XCTAssertEqual(try repo.findByAlias("running", language: "en")?.id, id)
+        // Idempotent re-seed must not throw on the unique index.
+        XCTAssertNoThrow(try repo.seedAliases(entryId: id, forms: [WordForm(label: "past", form: "ran")], language: "en"))
+    }
 }

@@ -55,6 +55,9 @@ public actor EnrichmentService {
             if let a { card = card.merging(a) }
             if let b { card = card.merging(b) }
             json = try encode(card)
+            try entries.markEnriched(id: id, aiResult: json)
+            try? entries.seedAliases(entryId: id, forms: card.forms, language: entry.language)
+            return try entries.entry(id: id) ?? entry
         case .phrase:
             var card = (try? JSONCleaning.decode(PhraseCard.self, from: entry.aiResult)) ?? Self.emptyPhrase
             async let extras = try? agy.enrichPhraseExtras(entry.rawText)

@@ -41,6 +41,7 @@ public actor RelationsBackfiller {
         let merged = card.merging(relations)
         let json = String(data: try JSONEncoder().encode(merged), encoding: .utf8) ?? "{}"
         try entries.setAiResult(id: id, aiResult: json)
+        try? entries.seedAliases(entryId: id, forms: merged.forms, language: entry.language)
         return try entries.entry(id: id)
     }
 

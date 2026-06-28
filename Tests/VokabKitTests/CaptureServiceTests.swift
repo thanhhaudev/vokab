@@ -488,6 +488,21 @@ final class CaptureServiceTests: XCTestCase {
         XCTAssertEqual(try h.entries.entry(id: id)?.rawText, "novel")
     }
 
+    /// A paragraph WORD item that is a known inflection (alias) of an existing lemma
+    /// must dedupe into that lemma, not create a separate fragment card.
+    func testPersistParagraphItemDedupesByAlias() throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let h = try makeHarness([])
+        let runId = try h.entries.insertCapture(
+            Entry(rawText: "run", type: "word", language: "en", capturedAt: now, aiResult: "{}"),
+            dueDate: now)
+        try h.entries.addAlias(entryId: runId, surface: "ran", language: "en")
+        let item = try JSONCleaning.decode(ParagraphItem.self, from: #"{"word":"ran","cefr":"A1"}"#)
+        let id = try h.service.persistParagraphItem(item, language: "en", source: source(now))
+        XCTAssertEqual(id, runId)                        // folded into the lemma
+        XCTAssertEqual(try h.entries.all().count, 1)     // no duplicate "ran" card
+    }
+
     func testDirtyWordDedupesAgainstCleanWord() async throws {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let h = try makeHarness([.respond(#"{"pos":"noun","meaning_vi":"quả táo"}"#)])

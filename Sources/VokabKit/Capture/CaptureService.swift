@@ -238,9 +238,13 @@ public struct CaptureService: Sendable {
         let sentence = sourceText.flatMap {
             SentenceExtractor.extractSentence(containing: word, from: $0)
         }
-        // Dedupe guard (SPEC §11): if this word already exists, don't insert a
-        // duplicate — backfill any missing capture context and return its id.
-        if let existing = try entries.find(rawText: word, language: language), let id = existing.id {
+        // Dedupe guard (SPEC §11): if this word already exists — by headword OR as a
+        // known inflection alias of an existing lemma (e.g. "ran" → "run") — don't
+        // insert a duplicate; backfill any missing capture context and return its id.
+        // Alias dedup is words-only (phrases have no inflection aliases).
+        if let existing = try entries.find(rawText: word, language: language)
+            ?? (type == .word ? try entries.findByAlias(word, language: language) : nil),
+           let id = existing.id {
             try entries.backfillCaptureContextIfMissing(
                 id: id, captureSentence: sentence,
                 sourceApp: source.appName, sourceURL: source.url)

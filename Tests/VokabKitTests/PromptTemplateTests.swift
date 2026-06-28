@@ -152,4 +152,14 @@ final class PromptTemplateTests: XCTestCase {
                                           meaningLanguage: "Vietnamese", taxonomy: [])
         XCTAssertTrue(p.lowercased().contains("headword") || p.lowercased().contains("lemma"))
     }
+
+    func test_relations_prompts_request_forms() {
+        let single = PromptTemplates.wordEnrichRelations("run", language: "en")
+        let batch = PromptTemplates.wordRelationsBatch(words: ["run"], language: "en")
+        let backfill = PromptTemplates.wordRelationsBackfill("run", language: "en")
+        for p in [single, batch, backfill] {
+            XCTAssertTrue(p.lowercased().contains("forms"), "missing forms in: \(p)")
+            XCTAssertTrue(p.lowercased().contains("irregular"), "missing irregular in: \(p)")
+        }
+    }
 }

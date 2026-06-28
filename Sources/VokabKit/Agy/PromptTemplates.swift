@@ -100,9 +100,14 @@ public enum PromptTemplates {
     public static func wordEnrichRelations(_ word: String, language: String) -> String {
         """
         For '\(word)' (language: \(language)) return ONLY JSON:
-        {synonyms[], antonyms[], word_family[], collocations[], confusables[], context_of_use, grammar_note}
+        {synonyms[], antonyms[], word_family[], collocations[], confusables[], forms[], irregular, context_of_use, grammar_note}
         collocations[] = 3–5 common collocations (e.g. "make a decision").
         confusables[] = [{word, note_vi}] easily-confused words, each with a short Vietnamese note on the difference.
+        forms[] = the word's inflected forms as [{label, form}], POS-appropriate
+          (verb: past, past participle, -ing, 3rd-person; noun: plural;
+           adjective: comparative, superlative). Omit forms that don't apply
+           (uncountable nouns, invariable words). Use SHORT human labels.
+        irregular = true if any form is irregular (e.g. ran/run, good/better), else false.
         context_of_use: 1–2 sentence Vietnamese learner note on the situation/context to use this word (formal/informal nuance, domain, when/where).
         grammar_note: 1–2 sentence Vietnamese note on grammar/tense (for verbs: tenses typically used in, irregular forms; for nouns: countable/uncountable).
         No preamble, no markdown fence.
@@ -131,10 +136,15 @@ public enum PromptTemplates {
         return """
         For EACH of these words (language: \(language)): [\(list)]
         return ONLY a JSON ARRAY, one object per word:
-        [{word, synonyms[], antonyms[], word_family[], collocations[], confusables[], context_of_use, grammar_note}]
+        [{word, synonyms[], antonyms[], word_family[], collocations[], confusables[], forms[], irregular, context_of_use, grammar_note}]
         "word" MUST be the exact input word.
         collocations[] = 3–5 common collocations (e.g. "make a decision").
         confusables[] = [{word, note_vi}] easily-confused words, each with a short Vietnamese note on the difference.
+        forms[] = the word's inflected forms as [{label, form}], POS-appropriate
+          (verb: past, past participle, -ing, 3rd-person; noun: plural;
+           adjective: comparative, superlative). Omit forms that don't apply
+           (uncountable nouns, invariable words). Use SHORT human labels.
+        irregular = true if any form is irregular (e.g. ran/run, good/better), else false.
         context_of_use: 1–2 sentence Vietnamese learner note on the situation/context to use this word (formal/informal nuance, domain, when/where).
         grammar_note: 1–2 sentence Vietnamese note on grammar/tense (for verbs: tenses typically used in, irregular forms; for nouns: countable/uncountable).
         No preamble, no markdown fence.
@@ -146,9 +156,14 @@ public enum PromptTemplates {
     public static func wordRelationsBackfill(_ word: String, language: String) -> String {
         """
         For '\(word)' (language: \(language)) return ONLY JSON:
-        {collocations[], confusables[], context_of_use, grammar_note}
+        {collocations[], confusables[], forms[], irregular, context_of_use, grammar_note}
         collocations[] = 3–5 common collocations (e.g. "make a decision").
         confusables[] = [{word, note_vi}] easily-confused words, each with a short Vietnamese note on the difference.
+        forms[] = the word's inflected forms as [{label, form}], POS-appropriate
+          (verb: past, past participle, -ing, 3rd-person; noun: plural;
+           adjective: comparative, superlative). Omit forms that don't apply
+           (uncountable nouns, invariable words). Use SHORT human labels.
+        irregular = true if any form is irregular (e.g. ran/run, good/better), else false.
         context_of_use: 1–2 sentence Vietnamese learner note on the situation/context to use this word (formal/informal nuance, domain, when/where).
         grammar_note: 1–2 sentence Vietnamese note on grammar/tense (for verbs: tenses typically used in, irregular forms; for nouns: countable/uncountable).
         No preamble, no markdown fence.

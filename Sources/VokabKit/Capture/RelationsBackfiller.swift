@@ -24,6 +24,7 @@ public actor RelationsBackfiller {
         let card = (try? JSONCleaning.decode(WordCard.self, from: fresh.aiResult)) ?? Self.emptyWord
         let needsBackfill = (card.collocations.isEmpty && card.confusables.isEmpty)
             || card.contextOfUse == nil || card.grammarNote == nil
+            || card.irregular == nil          // forms never fetched
         guard needsBackfill else { return fresh }
         if let existing = inFlight[id] { return try await existing.value }
 

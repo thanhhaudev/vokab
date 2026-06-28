@@ -69,3 +69,38 @@ final class RelationsBackfillerTests: XCTestCase {
         XCTAssertTrue(card.collocations.isEmpty)
     }
 }
+
+final class RelationsBackfillerFormsTests: XCTestCase {
+    private func harness(_ json: String) throws -> (RelationsBackfiller, EntryRepository, Int64) {
+        let queue = try VokabDatabase.makeInMemory()
+        let entries = EntryRepository(dbQueue: queue)
+        // A "fully enriched pre-forms" card: has collocations + context + grammar,
+        // so the OLD predicate would not backfill — only the new `irregular == nil` does.
+        let id = try entries.insertCapture(
+            Entry(rawText: "run", type: "word", language: "en", capturedAt: Date(),
+                  aiResult: json, enriched: true),
+            dueDate: Date())
+        let runner = MockAgyRunner([.respond(
+            #"{"forms":[{"label":"past","form":"ran"}],"irregular":true,"collocations":["go for a run"],"context_of_use":"x","grammar_note":"y"}"#)])
+        let agy = AgyService(runner: runner, settings: VokabSettings())
+        return (RelationsBackfiller(agy: agy, entries: entries), entries, id)
+    }
+
+    func test_backfillsForms_whenIrregularNil() async throws {
+        let (bf, entries, id) = try harness(
+            #"{"collocations":["go for a run"],"confusables":[],"context_of_use":"x","grammar_note":"y"}"#)
+        _ = try await bf.backfill(entry: try XCTUnwrap(entries.entry(id: id)))
+        let card = try JSONCleaning.decode(WordCard.self, from: try XCTUnwrap(entries.entry(id: id)).aiResult)
+        XCTAssertEqual(card.forms.first?.form, "ran")
+        XCTAssertEqual(card.irregular, true)
+    }
+
+    func test_noBackfill_whenIrregularAlreadySet() async throws {
+        // irregular already false → forms were fetched (empty is legitimate) → no agy call.
+        let (bf, entries, id) = try harness(
+            #"{"collocations":["go for a run"],"confusables":[],"forms":[],"irregular":false,"context_of_use":"x","grammar_note":"y"}"#)
+        let before = try XCTUnwrap(entries.entry(id: id)).aiResult
+        _ = try await bf.backfill(entry: try XCTUnwrap(entries.entry(id: id)))
+        XCTAssertEqual(try XCTUnwrap(entries.entry(id: id)).aiResult, before)  // unchanged
+    }
+}

@@ -255,7 +255,12 @@ public struct WordCard: Codable, Sendable, Equatable {
         if wordFamily.isEmpty { c.wordFamily = other.wordFamily }
         if collocations.isEmpty { c.collocations = other.collocations }
         if confusables.isEmpty { c.confusables = other.confusables }
-        if forms.isEmpty { c.forms = other.forms }
+        // Take `other`'s forms when ours are empty OR bare (no per-form detail) and
+        // theirs carry detail — so a backfill that adds gloss/ipa/examples to existing
+        // {label,form}-only forms is not discarded.
+        if forms.isEmpty || (!Self.formsHaveDetail(forms) && Self.formsHaveDetail(other.forms)) {
+            c.forms = other.forms
+        }
         c.irregular = irregular ?? other.irregular
         if senses.isEmpty { c.senses = other.senses }
         c.category = pick(category, other.category)
@@ -267,6 +272,13 @@ public struct WordCard: Codable, Sendable, Equatable {
     /// The gloss to display for the active meaning language `code`.
     public func meaning(forLanguage code: String) -> String? {
         resolveMeaning(meaning: meaning, lang: meaningLang, meaningEn: meaningEn, for: code)
+    }
+
+    /// True when any form carries per-form detail (gloss/ipa/examples) beyond the
+    /// bare {label, form}. Used by `merging` and the backfill trigger to detect cards
+    /// whose forms predate the per-form fields.
+    public static func formsHaveDetail(_ forms: [WordForm]) -> Bool {
+        forms.contains { ($0.gloss?.isEmpty == false) || ($0.ipa?.isEmpty == false) || !$0.examples.isEmpty }
     }
 
     /// Re-encodes this card as agy-shaped snake_case JSON. Used by the detail

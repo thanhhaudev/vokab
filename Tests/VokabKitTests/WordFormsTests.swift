@@ -53,4 +53,32 @@ final class WordFormsTests: XCTestCase {
         XCTAssertNil(f.gloss); XCTAssertNil(f.ipa); XCTAssertNil(f.usageNote); XCTAssertNil(f.commonError)
         XCTAssertEqual(f.examples, [])
     }
+
+    func test_formsHaveDetail() throws {
+        XCTAssertFalse(WordCard.formsHaveDetail([WordForm(label: "past", form: "ran")]))
+        XCTAssertTrue(WordCard.formsHaveDetail([WordForm(label: "past", form: "ran", gloss: "chạy")]))
+        XCTAssertTrue(WordCard.formsHaveDetail([WordForm(label: "past", form: "ran", examples: ["He ran."])]))
+    }
+
+    /// A card with bare {label,form} forms (pre-per-form-fields) must take the
+    /// detailed forms when backfill brings them — not keep the bare ones.
+    func test_merging_upgradesBareFormsToDetailed() throws {
+        let bare = try JSONCleaning.decode(WordCard.self,
+            from: #"{"forms":[{"form":"missed","label":"past"}]}"#)
+        let detailed = try JSONCleaning.decode(WordCard.self,
+            from: #"{"forms":[{"form":"missed","label":"past","gloss":"đã bỏ lỡ","examples":["I missed it."]}]}"#)
+        let merged = bare.merging(detailed)
+        XCTAssertEqual(merged.forms.first?.gloss, "đã bỏ lỡ")
+        XCTAssertEqual(merged.forms.first?.examples, ["I missed it."])
+    }
+
+    /// Detailed forms must NOT be clobbered by a later bare set.
+    func test_merging_keepsDetailedFormsOverBare() throws {
+        let detailed = try JSONCleaning.decode(WordCard.self,
+            from: #"{"forms":[{"form":"missed","label":"past","gloss":"đã bỏ lỡ"}]}"#)
+        let bare = try JSONCleaning.decode(WordCard.self,
+            from: #"{"forms":[{"form":"missed","label":"past"}]}"#)
+        let merged = detailed.merging(bare)
+        XCTAssertEqual(merged.forms.first?.gloss, "đã bỏ lỡ")
+    }
 }

@@ -103,4 +103,25 @@ final class RelationsBackfillerFormsTests: XCTestCase {
         _ = try await bf.backfill(entry: try XCTUnwrap(entries.entry(id: id)))
         XCTAssertEqual(try XCTUnwrap(entries.entry(id: id)).aiResult, before)  // unchanged
     }
+
+    /// A card enriched between the forms feature and the per-form fields: it has
+    /// collocations/context/grammar/irregular ALL set but BARE forms (no gloss).
+    /// The old predicate wouldn't backfill; the forms-lack-detail clause must, and
+    /// merging must upgrade the bare forms to the detailed ones.
+    func test_backfillsPerFormDetail_whenFormsAreBare() async throws {
+        let queue = try VokabDatabase.makeInMemory()
+        let entries = EntryRepository(dbQueue: queue)
+        let id = try entries.insertCapture(
+            Entry(rawText: "miss", type: "word", language: "en", capturedAt: Date(),
+                  aiResult: #"{"collocations":["miss out"],"confusables":[{"word":"mis","note_vi":"x"}],"forms":[{"label":"past","form":"missed"}],"irregular":false,"context_of_use":"x","grammar_note":"y"}"#,
+                  enriched: true),
+            dueDate: Date())
+        let runner = MockAgyRunner([.respond(
+            #"{"forms":[{"label":"past","form":"missed","gloss":"đã bỏ lỡ","examples":["I missed it."]}],"irregular":false,"collocations":["miss out"],"context_of_use":"x","grammar_note":"y"}"#)])
+        let bf = RelationsBackfiller(agy: AgyService(runner: runner, settings: VokabSettings()), entries: entries)
+        _ = try await bf.backfill(entry: try XCTUnwrap(entries.entry(id: id)))
+        let card = try JSONCleaning.decode(WordCard.self, from: try XCTUnwrap(entries.entry(id: id)).aiResult)
+        XCTAssertEqual(card.forms.first?.gloss, "đã bỏ lỡ")          // detail backfilled + merged
+        XCTAssertEqual(card.forms.first?.examples, ["I missed it."])
+    }
 }

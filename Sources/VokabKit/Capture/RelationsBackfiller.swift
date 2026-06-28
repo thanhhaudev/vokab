@@ -25,6 +25,9 @@ public actor RelationsBackfiller {
         let needsBackfill = (card.collocations.isEmpty && card.confusables.isEmpty)
             || card.contextOfUse == nil || card.grammarNote == nil
             || card.irregular == nil          // forms never fetched
+            // forms present but bare ({label,form} only, no gloss/ipa/examples) →
+            // a card enriched before the per-form fields existed; re-fetch.
+            || (!card.forms.isEmpty && !WordCard.formsHaveDetail(card.forms))
         guard needsBackfill else { return fresh }
         if let existing = inFlight[id] { return try await existing.value }
 

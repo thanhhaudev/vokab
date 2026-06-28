@@ -92,7 +92,8 @@ struct WordDetailView: View {
             // entries enriched before those fields existed. New captures already have
             // them from relations. Require a decodable card so a corrupt entry is never overwritten.
             if current.cardType == .word, let c = CardDecoding.word(current),
-               (c.collocations.isEmpty && c.confusables.isEmpty) || c.contextOfUse == nil || c.grammarNote == nil || c.irregular == nil {
+               (c.collocations.isEmpty && c.confusables.isEmpty) || c.contextOfUse == nil || c.grammarNote == nil || c.irregular == nil
+                || (!c.forms.isEmpty && !WordCard.formsHaveDetail(c.forms)) {
                 backfilling = true
                 let updated = try? await env.relationsBackfiller.backfill(entry: current)
                 withAnimation(.easeOut(duration: 0.25)) {

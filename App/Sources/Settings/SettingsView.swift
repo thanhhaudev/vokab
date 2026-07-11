@@ -223,6 +223,27 @@ struct SettingsView: View {
                                  inc: { settings.errorUnlockReps = min(20, settings.errorUnlockReps + 1); persist() })
                 }
             }
+            group(L.t("Listening card", "Thẻ Nghe")) {
+                SettingsRow(L.t("Enable audio front", "Bật mặt nghe"),
+                            sub: L.t("Sometimes hear the word instead of seeing it",
+                                     "Đôi lúc nghe từ thay vì thấy chữ")) {
+                    Toggle("", isOn: Binding(
+                        get: { settings.listeningAudioFront },
+                        set: { settings.listeningAudioFront = $0; persist() }
+                    )).labelsHidden()
+                }
+                SettingsRow(L.t("Unlock after (days)", "Mở sau (ngày)"),
+                            sub: L.t("Interval before listening starts", "Khoảng cách trước khi bắt đầu nghe")) {
+                    stepperField("\(settings.listeningUnlockInterval)",
+                                 dec: { settings.listeningUnlockInterval = max(0, settings.listeningUnlockInterval - 1); persist() },
+                                 inc: { settings.listeningUnlockInterval = min(60, settings.listeningUnlockInterval + 1); persist() })
+                }
+                SettingsRow(L.t("Min reviews seen", "Số lần đã thấy tối thiểu")) {
+                    stepperField("\(settings.listeningUnlockReps)",
+                                 dec: { settings.listeningUnlockReps = max(0, settings.listeningUnlockReps - 1); persist() },
+                                 inc: { settings.listeningUnlockReps = min(20, settings.listeningUnlockReps + 1); persist() })
+                }
+            }
             group(L.t("Advanced", "Nâng cao")) {
                 SettingsRow(L.t("Starting ease", "Ease khởi điểm"),
                             sub: L.t("SM-2 ease for new cards", "Ease SM-2 cho thẻ mới")) {

@@ -56,6 +56,9 @@ public struct VokabSettings: Codable, Sendable, Equatable {
     public var clozeUnlockReps: Int
     public var errorUnlockInterval: Int
     public var errorUnlockReps: Int
+    public var listeningAudioFront: Bool
+    public var listeningUnlockInterval: Int
+    public var listeningUnlockReps: Int
     public var startingEase: Double
     // Capture
     public var autoDetectLanguage: Bool
@@ -88,6 +91,9 @@ public struct VokabSettings: Codable, Sendable, Equatable {
         clozeUnlockReps: Int = 2,
         errorUnlockInterval: Int = 5,
         errorUnlockReps: Int = 2,
+        listeningAudioFront: Bool = true,
+        listeningUnlockInterval: Int = 1,
+        listeningUnlockReps: Int = 2,
         startingEase: Double = 2.5,
         autoDetectLanguage: Bool = true,
         defaultCaptureLanguage: String = "en"
@@ -118,6 +124,9 @@ public struct VokabSettings: Codable, Sendable, Equatable {
         self.clozeUnlockReps = clozeUnlockReps
         self.errorUnlockInterval = errorUnlockInterval
         self.errorUnlockReps = errorUnlockReps
+        self.listeningAudioFront = listeningAudioFront
+        self.listeningUnlockInterval = listeningUnlockInterval
+        self.listeningUnlockReps = listeningUnlockReps
         self.startingEase = startingEase
         self.autoDetectLanguage = autoDetectLanguage
         self.defaultCaptureLanguage = defaultCaptureLanguage
@@ -131,6 +140,7 @@ public struct VokabSettings: Codable, Sendable, Equatable {
         case newCardsPerDay, productionUnlockInterval, productionUnlockReps, startingEase
         case clozeUnlockInterval, clozeUnlockReps
         case errorUnlockInterval, errorUnlockReps
+        case listeningAudioFront, listeningUnlockInterval, listeningUnlockReps
         case autoDetectLanguage, defaultCaptureLanguage
     }
 
@@ -167,6 +177,9 @@ public struct VokabSettings: Codable, Sendable, Equatable {
         clozeUnlockReps = (try? c.decodeIfPresent(Int.self, forKey: .clozeUnlockReps)) ?? nil ?? d.clozeUnlockReps
         errorUnlockInterval = (try? c.decodeIfPresent(Int.self, forKey: .errorUnlockInterval)) ?? nil ?? d.errorUnlockInterval
         errorUnlockReps = (try? c.decodeIfPresent(Int.self, forKey: .errorUnlockReps)) ?? nil ?? d.errorUnlockReps
+        listeningAudioFront = (try? c.decodeIfPresent(Bool.self, forKey: .listeningAudioFront)) ?? nil ?? d.listeningAudioFront
+        listeningUnlockInterval = (try? c.decodeIfPresent(Int.self, forKey: .listeningUnlockInterval)) ?? nil ?? d.listeningUnlockInterval
+        listeningUnlockReps = (try? c.decodeIfPresent(Int.self, forKey: .listeningUnlockReps)) ?? nil ?? d.listeningUnlockReps
         startingEase = (try? c.decodeIfPresent(Double.self, forKey: .startingEase)) ?? nil ?? d.startingEase
         autoDetectLanguage = (try? c.decodeIfPresent(Bool.self, forKey: .autoDetectLanguage)) ?? nil ?? d.autoDetectLanguage
         defaultCaptureLanguage = (try? c.decodeIfPresent(String.self, forKey: .defaultCaptureLanguage)) ?? nil ?? d.defaultCaptureLanguage

@@ -74,6 +74,17 @@ final class ReviewSessionViewModel: ObservableObject {
         return ClozeBuilder.build(answer: entry.rawText, examples: examples)
     }
 
+    /// True when the current recognition card should present an audio-only front
+    /// (word hidden, pronunciation played) instead of the text front (P4.1).
+    /// Pure delegation to `ListeningFront` so it stays testable there.
+    var currentUsesAudioFront: Bool {
+        guard let card = current else { return false }
+        return ListeningFront.shouldUseAudioFront(
+            interval: card.state.interval, reviewCount: card.state.reviewCount,
+            enabled: env.settings.listeningAudioFront,
+            minInterval: env.settings.listeningUnlockInterval,
+            minReps: env.settings.listeningUnlockReps)
+    }
 
     func flip() { showingBack.toggle() }
 

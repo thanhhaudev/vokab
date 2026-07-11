@@ -57,24 +57,13 @@ struct FlashcardView: View {
     @ViewBuilder private func recognition(_ card: ReviewCard) -> some View {
         let summary = CardDecoding.summary(card.entry, meaningLanguage: env.settings.meaningLanguage)
         VStack(spacing: 0) {
-            // Front
-            VStack(spacing: 4) {
-                HStack(spacing: 4) {
-                    if let cefr = summary.cefr { Pill.cefr(cefr) }
-                    MultiPill(summary.pos, style: .type)
-                }
-                Text(card.entry.rawText)
-                    .font(.system(size: 30, weight: .medium)).foregroundStyle(Theme.textPrimary)
-                    .padding(.top, 10)
-                if let ipa = wordIPA(card.entry) {
-                    Text(ipa).font(Theme.mono(14)).foregroundStyle(Theme.textSecondary)
-                }
-                PronounceButton(text: card.entry.rawText,
-                                accent: Accent(settingsValue: env.settings.pronunciationAccent))
-                    .padding(.top, 6)
+            if model.currentUsesAudioFront && !model.showingBack {
+                ListeningFrontView(env: env, card: card)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 34).padding(.bottom, 24).padding(.horizontal, 24)
+            } else {
+                textFront(card, summary: summary)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 34).padding(.bottom, 24).padding(.horizontal, 24)
 
             if model.showingBack {
                 back(card, summary: summary)
@@ -92,10 +81,35 @@ struct FlashcardView: View {
             }
         }
         .onChange(of: model.showingBack) { _, revealed in
-            guard revealed, env.settings.autoPlayPronunciation else { return }
+            // Audio-front always replays the word on reveal (lock sound↔spelling);
+            // the text front replays only if the user enabled auto-play. Single
+            // call → no double-play when both are true.
+            guard revealed, env.settings.autoPlayPronunciation || model.currentUsesAudioFront else { return }
             Speaker.shared.speak(card.entry.rawText,
                                  accent: Accent(settingsValue: env.settings.pronunciationAccent))
         }
+    }
+
+    /// The default text front (word + IPA + pronounce). Swapped out for
+    /// `ListeningFrontView` when the current card uses the audio front.
+    private func textFront(_ card: ReviewCard, summary: (pos: String?, meaning: String?, cefr: String?)) -> some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 4) {
+                if let cefr = summary.cefr { Pill.cefr(cefr) }
+                MultiPill(summary.pos, style: .type)
+            }
+            Text(card.entry.rawText)
+                .font(.system(size: 30, weight: .medium)).foregroundStyle(Theme.textPrimary)
+                .padding(.top, 10)
+            if let ipa = wordIPA(card.entry) {
+                Text(ipa).font(Theme.mono(14)).foregroundStyle(Theme.textSecondary)
+            }
+            PronounceButton(text: card.entry.rawText,
+                            accent: Accent(settingsValue: env.settings.pronunciationAccent))
+                .padding(.top, 6)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 34).padding(.bottom, 24).padding(.horizontal, 24)
     }
 
     private func back(_ card: ReviewCard, summary: (pos: String?, meaning: String?, cefr: String?)) -> some View {

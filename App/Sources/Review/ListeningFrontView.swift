@@ -35,7 +35,8 @@ struct ListeningFrontView: View {
                 .padding(.vertical, 4)
                 .accessibilityLabel(L.t("Listen", "Nghe"))
             HStack(spacing: 10) {
-                PronounceButton(text: card.entry.rawText, accent: accent)
+                PronounceButton(text: card.entry.rawText, accent: accent,
+                                 accessibilityLabelOverride: L.t("Replay audio", "Nghe lại"))
                 if let sentence = contextSentence {
                     Button {
                         Speaker.shared.speak(sentence, accent: accent)

@@ -10,6 +10,10 @@ struct PronounceButton: View {
     let text: String
     let accent: Accent
     var size: Size = .regular
+    /// Overrides the default "Pronounce <text>" accessibility label. Use when
+    /// the surrounding UI intentionally hides `text` (e.g. the listening
+    /// front, P4.1) so VoiceOver doesn't announce the hidden answer.
+    var accessibilityLabelOverride: String? = nil
     @ObservedObject private var speaker = Speaker.shared
 
     enum Size {
@@ -38,6 +42,6 @@ struct PronounceButton: View {
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(isSpeaking ? L.t("Stop", "Dừng") : "Pronounce \(text)")
+        .accessibilityLabel(isSpeaking ? L.t("Stop", "Dừng") : (accessibilityLabelOverride ?? "Pronounce \(text)"))
     }
 }

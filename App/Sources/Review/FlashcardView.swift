@@ -24,6 +24,19 @@ struct FlashcardView: View {
                     ProductionCardView(env: env, card: card,
                                        onGrade: { grade in model.grade(grade) })
                         .id(card.entry.id)
+                } else if model.currentUsesAudioFront {
+                    // Checked before cloze: SM-2 jumps interval 1→6 on a card's 2nd
+                    // successful review, so cloze's default gate (interval>=3) and
+                    // listening's default gate (reviewCount>=2, even) open on the
+                    // exact same review. Cloze permanently qualifies from then on,
+                    // so if cloze were checked first here, listening would almost
+                    // never fire for any card whose examples are cloze-eligible —
+                    // the common case — defeating the feature (found by adversarial
+                    // review after P4.1 shipped). Listening still defers to
+                    // production/error (above); against cloze it now claims its
+                    // designated even-reviewCount turn, and cloze wins the odd
+                    // turns — the two alternate instead of cloze starving listening.
+                    recognition(card).id(card.entry.id)
                 } else if model.currentQualifiesForCloze, let prompt = model.currentClozePrompt {
                     ClozeCardView(env: env, card: card, prompt: prompt) { grade in model.grade(grade) }
                         .id(card.entry.id)

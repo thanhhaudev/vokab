@@ -29,6 +29,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     private var extraction: NSWindow?
     private var batch: NSWindow?
     private var captureResult: NSWindow?
+    private var about: NSWindow?
     /// Entry to select when a newly created Library window first appears.
     private(set) var pendingSelectionId: Int64?
 
@@ -129,6 +130,25 @@ final class WindowManager: NSObject, NSWindowDelegate {
         present(batch)
     }
 
+    /// Fixed-size About window (replaces the OS-standard about panel — see
+    /// `CommandGroup(replacing: .appInfo)` in `VokabApp`). Not resizable/miniaturizable,
+    /// matching the standard about panel's chrome.
+    func showAbout() {
+        if about == nil {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 260, height: 260),
+                styleMask: [.titled, .closable],
+                backing: .buffered, defer: false)
+            window.title = L.t("About vokab", "Giới thiệu vokab")
+            window.contentViewController = NSHostingController(rootView: AboutView())
+            window.isReleasedWhenClosed = false
+            window.delegate = self
+            window.center()
+            about = window
+        }
+        present(about)
+    }
+
     private func makeWindow<V: View>(title: String, width: CGFloat, height: CGFloat,
                                      minWidth: CGFloat, minHeight: CGFloat, root: V) -> NSWindow {
         let window = NSWindow(
@@ -164,7 +184,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
         // vokab windows remain visible.
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            let stillVisible = [self.library, self.review, self.captureResult, self.extraction, self.batch]
+            let stillVisible = [self.library, self.review, self.captureResult, self.extraction, self.batch, self.about]
                 .compactMap { $0 }
                 .contains { $0.isVisible }
             if !stillVisible {

@@ -26,5 +26,14 @@ struct VokabApp: App {
         Settings {
             SettingsView().environmentObject(env)
         }
+        .commands {
+            // Swap the OS-standard about panel for AboutView (WindowManager.showAbout),
+            // which carries a GitHub link the generic AppKit panel has no room for.
+            CommandGroup(replacing: .appInfo) {
+                Button(L.t("About vokab", "Giới thiệu vokab")) {
+                    WindowManager.shared.showAbout()
+                }
+            }
+        }
     }
 }
